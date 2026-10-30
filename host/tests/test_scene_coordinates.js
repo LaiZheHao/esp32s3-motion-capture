@@ -37,5 +37,14 @@ for(const kind of ['fixed','translated','boards']){
     {selectedSlot:'right_upper_arm',devices:[{device_id:'offline',body_slot:'right_upper_arm',source:'simulation',quaternion:[1,0,0,0]}]});
 }
 assert.ok(points.length>0);
+const handlers={},interactiveCanvas={...canvas,addEventListener(name,handler){handlers[name]=handler;},setPointerCapture(){}};
+const interactive=new BodyView(interactiveCanvas);
+handlers.pointerdown({clientX:100,clientY:100,pointerId:1,shiftKey:false});
+handlers.pointermove({clientX:150,clientY:120});handlers.pointerup({clientX:150,clientY:120});
+assert.notEqual(interactive.yaw,0);assert.notEqual(interactive.elevation,.18);
+handlers.wheel({deltaY:-100,preventDefault(){}});assert.ok(interactive.zoom>1);
+const immutable={segments:[{id:"head",start:[0,0,1.55],end:[0,0,1.77]}]},saved=JSON.stringify(immutable);
+interactive.draw(immutable);assert.equal(JSON.stringify(immutable),saved);
+interactive.reset();assert.equal(interactive.yaw,0);assert.equal(interactive.zoom,1);
 for(const name of ['body_view.js','app.js','wifi_monitor.html'])assert.match(fs.readFileSync(path.join(__dirname,'../web',name),'utf8'),/(?:PoseMath|root\.PoseMath)\.project\(/);
 console.log('Scene coordinates: camera determinant +1, front/left/up, signed movement, legacy mirrors, all canvas paths passed');

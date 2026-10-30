@@ -36,7 +36,9 @@
       canvas.addEventListener("pointermove",event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(drag.pan){this.pan[0]+=dx;this.pan[1]+=dy;}else{this.yaw+=dx*.009;this.elevation=Math.max(-1.2,Math.min(1.2,this.elevation+dy*.009));}drag.x=event.clientX;drag.y=event.clientY;});
       canvas.addEventListener("pointerup",event=>{if(drag&&Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<5){const box=canvas.getBoundingClientRect(),point=[event.clientX-box.left,event.clientY-box.top];const found=this.hits.map(item=>({...item,d:pointSegmentDistance(point,item.a,item.b)})).sort((a,b)=>a.d-b.d)[0];if(found&&found.d<15)this.onSelect(found.slot,found.device_id);}drag=null;});
       canvas.addEventListener("pointercancel",()=>{drag=null;});
+      canvas.addEventListener("wheel",event=>{event.preventDefault();this.setZoom(this.zoom*Math.exp(-event.deltaY*.001));},{passive:false});
     }
+    setZoom(value){this.zoom=Math.max(.45,Math.min(2.8,Number(value)||1));return this.zoom;}
     reset(){this.yaw=0;this.elevation=.18;this.zoom=1;this.pan=[0,0];}
     clearTrail(){this.trail=[];}
     draw(frame,{selectedSlot,devices=[],position=[0,0,0],positionSource="off",mode="LIVE",epoch=null}={}) {
@@ -47,7 +49,7 @@
       // Board cells have their own axes. Avoid painting an unused floor grid
       // beneath every cell on every animation frame.
       if(this.kind==="boards") {this.drawBoards(ctx,box,devices,selectedSlot);this.drawAngles(devices,mode);return;}
-      const scale=Math.min(box.width*.34,box.height*.43)*this.zoom,origin=[box.width/2+this.pan[0],box.height*.89+this.pan[1]],rootOffset=this.kind==="translated"?vector(position):[0,0,0];
+      const scale=Math.min(box.width*.80,box.height*.46)*this.zoom,origin=[box.width/2+this.pan[0],box.height*.91+this.pan[1]],rootOffset=this.kind==="translated"?vector(position):[0,0,0];
       const project=p=>root.PoseMath.project(vector(p),this.yaw,this.elevation,origin,scale);
       const line=(a,b,color,width=1,dash=[])=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([]);};
       for(let i=-2;i<=2;i+=.25){const major=Math.abs(i%1)<.001;line(project([i,-2,0]),project([i,2,0]),major?"rgba(101,116,190,.16)":"rgba(101,116,190,.07)");line(project([-2,i,0]),project([2,i,0]),major?"rgba(101,116,190,.16)":"rgba(101,116,190,.07)");}
@@ -60,21 +62,22 @@
       const bySegment=Object.fromEntries(segments.map(segment=>[segment.id||segment.slot,segment]));
       // Paint a soft, neutral mannequin envelope behind the measured skeleton.
       // It follows the same live joint anchors and contains no anatomical detail.
-      ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.globalAlpha=.34;ctx.shadowColor="#5b6cff";ctx.shadowBlur=18;
+      ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.globalAlpha=.95;ctx.shadowColor="#5b6cff";ctx.shadowBlur=14;
       const torsoIds=["left_upper_arm","right_upper_arm","right_thigh","left_thigh"],torso=torsoIds.map(id=>bySegment[id]).filter(Boolean);
       if(torso.length===4){
         const outline=torso.map(segment=>project(translatePoint(segmentEnds(segment,frame)[0],rootOffset)));
         const fill=ctx.createLinearGradient?.(outline[0][0],outline[0][1],outline[2][0],outline[2][1]);
-        if(fill?.addColorStop){fill.addColorStop(0,"rgba(170,180,255,.62)");fill.addColorStop(1,"rgba(77,94,197,.24)");}
-        ctx.fillStyle=fill||"rgba(103,119,232,.34)";ctx.beginPath();outline.forEach((point,index)=>index?ctx.lineTo(point[0],point[1]):ctx.moveTo(point[0],point[1]));ctx.closePath();ctx.fill();
+        if(fill?.addColorStop){fill.addColorStop(0,"#8993bf");fill.addColorStop(.32,"#414d7b");fill.addColorStop(.65,"#222e52");fill.addColorStop(1,"#6776a6");}
+        ctx.fillStyle=fill||"#414d7b";ctx.beginPath();const [l,r,hr,hl]=outline;ctx.moveTo(l[0],l[1]);ctx.quadraticCurveTo?.((l[0]+r[0])/2,l[1]-12,r[0],r[1]);ctx.lineTo(r[0],r[1]);ctx.quadraticCurveTo?.(r[0]-.02*scale,(r[1]+hr[1])/2,hr[0],hr[1]);ctx.lineTo(hr[0],hr[1]);ctx.lineTo(hl[0],hl[1]);ctx.quadraticCurveTo?.(l[0]+.02*scale,(l[1]+hl[1])/2,l[0],l[1]);ctx.closePath();ctx.fill();ctx.strokeStyle="rgba(181,197,255,.65)";ctx.lineWidth=1.2;ctx.stroke();
       }
       for(const segment of segments) {
         const slot=segment.slot||segment.id||segment.body_slot,[start,end]=segmentEnds(segment,frame),a=project(translatePoint(start,rootOffset)),b=project(translatePoint(end,rootOffset));
         const torso=/pelvis|torso|chest/.test(slot),upper=/upper_arm|thigh/.test(slot),head=slot==="head";
-        const gradient=ctx.createLinearGradient?.(a[0],a[1],b[0],b[1]);
-        if(gradient?.addColorStop){gradient.addColorStop(0,"rgba(162,174,255,.68)");gradient.addColorStop(.5,"rgba(91,108,255,.32)");gradient.addColorStop(1,"rgba(151,163,240,.62)");}
-        ctx.strokeStyle=gradient||"rgba(112,126,255,.42)";ctx.lineWidth=torso?30:head?22:upper?20:16;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
-        if(head){ctx.fillStyle="rgba(154,166,245,.32)";ctx.beginPath();ctx.ellipse(b[0],b[1]-9,12,17,0,0,Math.PI*2);ctx.fill();}
+        if(torso)continue;
+        const thigh=/thigh/.test(slot),shank=/shank/.test(slot),width=scale*(head?.075:thigh?.15:shank?.10:upper?.10:.065),gradient=ctx.createLinearGradient?.(a[0]-width/2,a[1],a[0]+width/2,a[1]);
+        if(gradient?.addColorStop){gradient.addColorStop(0,"#9ba9d4");gradient.addColorStop(.2,"#65739f");gradient.addColorStop(.65,"#29365b");gradient.addColorStop(1,"#7b8dbd");}
+        if(head){ctx.strokeStyle=gradient||"#65739f";ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(a[0]+(b[0]-a[0])*.3,a[1]+(b[1]-a[1])*.3);ctx.stroke();ctx.fillStyle=gradient||"#65739f";ctx.beginPath();ctx.ellipse((a[0]+b[0])/2,(a[1]+b[1])/2-scale*.02,scale*.068,scale*.10,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#99abd7";ctx.lineWidth=1;ctx.stroke();continue;}
+        ctx.strokeStyle="rgba(186,203,255,.6)";ctx.lineWidth=width+2;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.strokeStyle=gradient||"#53638e";ctx.lineWidth=width;ctx.stroke();
       }
       ctx.restore();
       let segmentIndex=0;
@@ -85,15 +88,14 @@
         // The links between joint anchors are virtual geometry, not additional
         // sampled segments. Connect to the nearest point on the parent bone.
         const parent=bySegment[segment.parent];
-        if(parent){const [p0,p1]=segmentEnds(parent,frame),d=p1.map((v,i)=>v-p0[i]),n=d.reduce((sum,v)=>sum+v*v,0),t=n?Math.max(0,Math.min(1,d.reduce((sum,v,i)=>sum+v*(start[i]-p0[i]),0)/n)):0,anchor=p0.map((v,i)=>v+t*d[i]);if(Math.hypot(...anchor.map((v,i)=>v-start[i]))>1e-5)line(project(translatePoint(anchor,rootOffset)),a,"rgba(116,128,179,.4)",2,[3,3]);}
-        line(a,b,selected?"#9b72ff":color,selected?7:4,segment.measured?[]:[5,4]);
-        ctx.save();ctx.fillStyle=selected?"#9b72ff":color;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=selected?20:12;for(const point of [a,b]){ctx.beginPath();ctx.arc(point[0],point[1],selected?6:4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(225,230,255,.8)";ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();
+        if(selected||segment.measured)line(a,b,selected?"#9b72ff":color,selected?4:2,segment.measured?[]:[5,4]);
+        const node=[(a[0]+b[0])/2,(a[1]+b[1])/2];ctx.save();ctx.fillStyle=selected?"#9b72ff":color;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=selected?20:12;for(const point of [node]){ctx.beginPath();ctx.arc(point[0],point[1],selected?7:5,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(225,230,255,.8)";ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();
         const center=[(a[0]+b[0])/2,(a[1]+b[1])/2];ctx.save();ctx.fillStyle="rgba(8,12,29,.88)";ctx.strokeStyle="rgba(143,157,255,.72)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(center[0]+10,center[1],8,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="9px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),center[0]+10,center[1]);ctx.restore();
         this.hits.push({slot,device_id:segment.device_id,a,b});
         if(slot==="head"){const face=rotate([.12,0,0],segment.world_quaternion||[1,0,0,0]),tip=end.map((v,i)=>v+face[i]);line(b,project(translatePoint(tip,rootOffset)),color,3);}
         if(selected){[[.1,0,0],[0,.1,0],[0,0,.1]].forEach((axis,i)=>{const delta=rotate(axis,segment.world_quaternion||[1,0,0,0]);line(a,project(translatePoint(start.map((v,j)=>v+delta[j]),rootOffset)),["#e66354","#279975","#397fd7"][i],2);});}
       }
-      ctx.font="12px system-ui";ctx.fillStyle="#8f9ab8";ctx.fillText(this.kind==="fixed"?"中性简化人台 · 实时姿态":`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,23);
+      ctx.font="12px system-ui";ctx.fillStyle="#8f9ab8";ctx.fillText(this.kind==="fixed"?`中性简化人台 · ${mode==="REPLAY"?"保存姿态回放":"实时姿态"}`:`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,23);
       if(!segments.length){ctx.fillText("等待骨架帧；未接入节点不推测动作",12,44);}
       if(this.kind==="translated"){ctx.fillStyle="#f0b45d";ctx.fillText("相机拖动只改变观察视角，不是测量平移",12,box.height-12);}
     }

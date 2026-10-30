@@ -34,6 +34,8 @@ jobs:
           node --check web/body_view.js
           node --check web/body_app.js
           node --check web/direction_app.js
+          node --check web/navigation.js
+          node --check web/session_archive.js
       - name: Test pose transformations
         run: |
           node tests/test_pose_math.js
@@ -45,6 +47,8 @@ jobs:
           node tests/test_scene_coordinates.js
           node tests/test_body_selection.js
           node tests/test_direction_ui.js
+          node tests/test_navigation.js
+          node tests/test_session_archive.js
       - name: Generate offline experiment reports
         run: |
           for preset in rigid_check upper_limb lower_limb bilateral; do

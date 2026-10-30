@@ -22,7 +22,7 @@
   function releasePending(text,kind) {if(pendingCommand?.button){pendingCommand.button.textContent=pendingCommand.label;pendingCommand.button.removeAttribute("aria-busy");pendingCommand.button.disabled=false;}pendingCommand=null;feedback(text,kind);}
   function command(action,extra={}) {
     const aliases={start_recording:"record_start",stop_recording:"record_stop"};
-    if(action==="zero"){byId("bodyInitBegin").click();byId("bodyInitBegin").scrollIntoView({behavior:"smooth",block:"center"});return;}
+    if(action==="zero"){window.AppNavigation?.navigate("calibration");window.AppNavigation?.calibrationStep(3);byId("bodyInitBegin").click();return;}
     if(!api.connected){byId("message").textContent="服务未连接，命令未发送";return;}
     const quiet=["select","replay_seek"].includes(action);
     if(!quiet&&(!state||!Object.prototype.hasOwnProperty.call(state,"command_result"))){feedback("后台尚未加载新版确认协议，本次操作未发送。请在方便时手动重启开发台服务，再刷新网页。","error");return;}
@@ -123,6 +123,7 @@
     byId("bodyCounts").textContent=`硬件有效 ${real} · 已初始化 ${devices.filter(device=>device.initialized).length}`;
     if(lastMode!==next.mode){views.forEach(view=>view.clearTrail());lastMode=next.mode;}
     renderDevices();renderSlots();renderEndpoints();renderWorkflow();
+    window.AppNavigation?.update(next);
     window.DirectionApp?.update({...next,selected_device_id:selectedDevice,selected_node:displayedDevice()});
     if(pendingCommand?.button){pendingCommand.button.disabled=true;pendingCommand.button.textContent="处理中…";}
   }
@@ -155,10 +156,10 @@
   for(const slider of document.querySelectorAll?.("[data-zoom]")||[]){slider.oninput=()=>{const view=views.find(item=>item.canvas.id===slider.dataset.zoom);if(view)view.zoom=Number(slider.value);};}
   byId("bodyResetViews").onclick=()=>{views.forEach(view=>view.reset());for(const slider of document.querySelectorAll?.("[data-zoom]")||[])slider.value=1;};byId("bodyClearTrail").onclick=()=>views.forEach(view=>view.clearTrail());
   byId("bodyRecord").onclick=()=>{const stopping=state?.recording?.active;command(stopping?"record_stop":"record_start");if(stopping)setTimeout(refreshSessions,250);};
-  byId("record").onclick=()=>byId("bodyRecord").click();byId("records").textContent="完整动作会话列表";byId("records").onclick=()=>{refreshSessions();byId("bodySessions").scrollIntoView({behavior:"smooth",block:"center"});};
+  byId("record").onclick=()=>byId("bodyRecord").click();byId("records").textContent="完整动作会话列表";byId("records").onclick=()=>{refreshSessions();window.AppNavigation?.navigate("records");};
   async function refreshSessions() {const button=byId("bodyRefreshSessions");if(button.disabled)return;button.disabled=true;button.textContent="读取中…";try{const response=await fetch("/api/body/recordings");if(!response.ok)throw new Error("读取会话列表失败");const result=await response.json(),items=result.items||[],options=[{id:"",label:"请选择已保存会话"},...items.map(item=>({id:item.id||item.session,label:`${item.id||item.session}${item.incomplete||item.status==="incomplete"?" · 未完整结束":""}`}))],old=byId("bodySessions").value;optionList(byId("bodySessions"),options,old||options[1]?.id||"");sessionKey=JSON.stringify(items);if(state)renderWorkflow();}catch(error){byId("bodyRecordDetails").textContent=error.message;feedback(error.message,"error");}finally{button.disabled=false;button.textContent="刷新列表";}}
   byId("bodyRefreshSessions").onclick=refreshSessions;byId("bodySessions").onchange=()=>state&&renderWorkflow();
-  byId("bodyReplayOpen").onclick=()=>command("replay_open",{session:byId("bodySessions").value});byId("bodyReplayPlay").onclick=()=>command("replay_play");byId("bodyReplayPause").onclick=()=>command("replay_pause");byId("bodyReplayClose").onclick=()=>command("replay_close");byId("bodyReplaySeek").oninput=()=>command("replay_seek",{time_s:Number(byId("bodyReplaySeek").value)});
+  byId("bodyReplayOpen").onclick=()=>{command("replay_open",{session:byId("bodySessions").value});window.AppNavigation?.navigate("replay");};byId("bodyReplayPlay").onclick=()=>command("replay_play");byId("bodyReplayPause").onclick=()=>command("replay_pause");byId("bodyReplayClose").onclick=()=>{command("replay_close");window.AppNavigation?.navigate("dashboard");};byId("bodyReplaySeek").oninput=()=>command("replay_seek",{time_s:Number(byId("bodyReplaySeek").value)});
   function animate(now=clock()){
     if(lastAnimationAt!==null)diagnostics.maxAnimationGapMs=Math.max(diagnostics.maxAnimationGapMs,now-lastAnimationAt);
     lastAnimationAt=now;

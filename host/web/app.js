@@ -55,6 +55,7 @@ function drawChart(canvas, samples) {
 }
 function addHistory(node){for(const key of Object.keys(histories)){histories[key].push(node[key]);if(histories[key].length>400)histories[key].shift();}}
 function clearHistory(){for(const key of Object.keys(histories))histories[key].length=0;lastFrame=null;}
+window.renderRecordedSeries=nodes=>{for(const key of Object.keys(histories))histories[key]=nodes.map(node=>node[key]||[0,0,0]);};
 function renderNode(node) {
   orientation=node.quaternion;const angles=node.euler||euler(orientation);
   ["roll","pitch","yaw"].forEach((id,i)=>$(id).textContent=format(angles[i],1)+"°");
@@ -129,6 +130,7 @@ const poseCanvas=$("poseCanvas");poseCanvas.onpointerdown=e=>{dragging=[e.client
 $("clearTrail").onclick=()=>poseTrail=[];
 async function fetchJson(url){const response=await fetch(url);if(!response.ok){let message="请求失败";try{message=(await response.json()).detail||message;}catch{}throw new Error(message);}return response.json();}
 function selectedItem(){return catalogItems.find(item=>item.id===$("sessions").value);}
+window.refreshLegacySessions=async()=>{try{const data=await fetchJson("/api/recordings");catalogItems=data.items.filter(item=>item.files?.some(file=>file.name==="imu-data.csv")||item.kind==="legacy_jsonl");activeSession=data.active?.split(/[\\/]/).pop();$("sessions").replaceChildren();catalogItems.forEach(item=>$("sessions").add(new Option(item.id,item.id)));updateSession();}catch(error){$("sessionInfo").textContent=error.message;}};
 function updateSession(){const item=selectedItem(),active=item?.id===activeSession;$("preview").disabled=!item||item.kind!=="csv_session";$("download").disabled=!item||active;$("loadReplay").disabled=!item||active||item.kind!=="csv_session"||latest?.stats.recording;$("sessionInfo").textContent=active?"当前记录中，请停止记录后回放或导出":"回放最多显示 5000 个均匀抽取的样本；ZIP 导出保留完整数据。";}
 $("records").onclick=async()=>{try{const data=await fetchJson("/api/recordings");catalogItems=data.items;activeSession=data.active?.split(/[\\/]/).pop();$("sessions").replaceChildren();catalogItems.forEach(item=>$("sessions").add(new Option(item.id+(item.id===activeSession?"（记录中）":""),item.id)));updateSession();$("recordDialog").showModal();}catch(error){alert(error.message);}};
 $("closeDialog").onclick=()=>$("recordDialog").close();$("sessions").onchange=updateSession;
