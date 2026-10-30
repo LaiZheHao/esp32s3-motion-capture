@@ -169,7 +169,7 @@
     draw(now);displayFrames++;
     if(now-displayWindow>=1000){displayFps=displayFrames*1000/(now-displayWindow);displayFrames=0;displayWindow=now;
       const stale=lastAcceptedAt!==null&&clock()-lastAcceptedAt>500;
-      byId("bodyRenderStatus").textContent=`模型显示 ${Math.round(displayFps)} 帧/秒 · 显示插值约50毫秒 · 页面最大刷新间隔 ${Math.round(diagnostics.maxAnimationGapMs)}毫秒 · 已跳过 ${diagnostics.staleStates} 条过时显示状态${stale?" · 页面状态滞后，保持最后姿态":""}；数据频率以接收质量为准`;}
+      byId("bodyRenderStatus").textContent=`显示 ${Math.round(displayFps)} 帧/秒${stale?" · 状态失鲜，保持最后姿态":""} · 空心节点：未测量 · 实心节点：有效 / 选中`;}
     requestAnimationFrame(animate);
   }connect();requestAnimationFrame(animate);
 })();

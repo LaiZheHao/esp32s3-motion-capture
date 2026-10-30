@@ -49,7 +49,7 @@ function drawChart(canvas, samples) {
   const {ctx,width,height}=canvasSize(canvas);ctx.clearRect(0,0,width,height);
   let min=Infinity,max=-Infinity;for(const sample of samples)for(const v of sample){min=Math.min(min,v);max=Math.max(max,v);}
   if(!samples.length){min=-1;max=1;}if(max-min<.01){min-=.5;max+=.5;}const pad=(max-min)*.1;min-=pad;max+=pad;
-  ctx.font="11px system-ui";ctx.fillStyle="#7f89a6";ctx.fillText(format(max,1),0,12);ctx.fillText(format(min,1),0,height-5);
+  ctx.font="14px system-ui";ctx.fillStyle="#aab6cf";ctx.fillText(format(max,1),0,15);ctx.fillText(format(min,1),0,height-5);
   ctx.lineWidth=1;ctx.strokeStyle="rgba(122,135,184,.14)";for(let j=0;j<4;j++){const y=8+j*(height-16)/3;ctx.beginPath();ctx.moveTo(48,y);ctx.lineTo(width,y);ctx.stroke();}
   for(let axis=0;axis<3;axis++){ctx.strokeStyle=colors[axis];ctx.shadowColor=colors[axis];ctx.shadowBlur=4;ctx.lineWidth=1.5;ctx.beginPath();samples.forEach((v,i)=>{const x=48+i*(width-50)/Math.max(1,samples.length-1),y=height-8-(v[axis]-min)/(max-min)*(height-16);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.shadowBlur=0;}
 }

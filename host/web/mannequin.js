@@ -85,16 +85,16 @@
       const points=projected.flatMap(face=>face.points),left=Math.floor(Math.min(...points.map(p=>p[0])))-2,top=Math.floor(Math.min(...points.map(p=>p[1])))-2,right=Math.ceil(Math.max(...points.map(p=>p[0])))+2,bottom=Math.ceil(Math.max(...points.map(p=>p[1])))+2;
       const resolution=Math.min(1.6,1200/Math.max(1,bottom-top)),width=Math.max(1,Math.ceil((right-left)*resolution)),height=Math.max(1,Math.ceil((bottom-top)*resolution));
       const buffer=new OffscreenCanvas(width,height),target=buffer.getContext("2d"),pixels=target.createImageData(width,height),depths=new Float32Array(width*height).fill(-Infinity),half=unit(add(light,view));
-      const shade=normal=>{let n=normal;if(dot(n,view)<0)n=mul(n,-1);const diffuse=Math.max(0,dot(n,light)),rim=(1-Math.abs(dot(n,view)))**4,spec=Math.max(0,dot(n,half))**24,k=.55+.5*diffuse+.25*rim;return [77,90,137].map((v,i)=>Math.min(255,v*k+rim*[57,67,108][i]+spec*40));};
+      const shade=normal=>{let n=normal;if(dot(n,view)<0)n=mul(n,-1);const diffuse=Math.max(0,dot(n,light)),rim=(1-Math.abs(dot(n,view)))**3,spec=Math.max(0,dot(n,half))**24,k=.44+.4*diffuse;return [...[61,73,108].map((v,i)=>Math.min(255,v*k+rim*[130,146,205][i]+spec*30)),255*(.58+.38*rim)];};
       for(const face of projected){const vertices=face.points.map((p,i)=>[(p[0]-left)*resolution,(p[1]-top)*resolution,p[2],...shade(face.normals[i])]);
         for(const indices of [[0,1,2],[0,2,3]]){const [a,b,c]=indices.map(i=>vertices[i]),den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);if(Math.abs(den)<1e-8)continue;
           const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))),x1=Math.min(width-1,Math.ceil(Math.max(a[0],b[0],c[0]))),y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))),y1=Math.min(height-1,Math.ceil(Math.max(a[1],b[1],c[1])));
-          for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const u=((b[1]-c[1])*(x+.5-c[0])+(c[0]-b[0])*(y+.5-c[1]))/den,v=((c[1]-a[1])*(x+.5-c[0])+(a[0]-c[0])*(y+.5-c[1]))/den,w=1-u-v;if(u<-.001||v<-.001||w<-.001)continue;const index=y*width+x,z=u*a[2]+v*b[2]+w*c[2];if(z<depths[index])continue;depths[index]=z;const pixel=index*4;for(let channel=0;channel<3;channel++)pixels.data[pixel+channel]=u*a[channel+3]+v*b[channel+3]+w*c[channel+3];pixels.data[pixel+3]=255;}
+          for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const u=((b[1]-c[1])*(x+.5-c[0])+(c[0]-b[0])*(y+.5-c[1]))/den,v=((c[1]-a[1])*(x+.5-c[0])+(a[0]-c[0])*(y+.5-c[1]))/den,w=1-u-v;if(u<-.001||v<-.001||w<-.001)continue;const index=y*width+x,z=u*a[2]+v*b[2]+w*c[2];if(z<depths[index])continue;depths[index]=z;const pixel=index*4;for(let channel=0;channel<4;channel++)pixels.data[pixel+channel]=u*a[channel+3]+v*b[channel+3]+w*c[channel+3];}
         }
       }
-      target.putImageData(pixels,0,0);ctx.drawImage(buffer,left,top,right-left,bottom-top);return projected.length;
+      target.putImageData(pixels,0,0);ctx.save();ctx.shadowColor="rgba(135,166,255,.45)";ctx.shadowBlur=7;ctx.drawImage(buffer,left,top,right-left,bottom-top);ctx.restore();return projected.length;
     }
-    ctx.save();ctx.lineJoin="round";ctx.lineWidth=.65;
+    ctx.save();ctx.lineJoin="round";ctx.lineWidth=.65;ctx.globalAlpha=.7;
     for(const face of projected){
       // Two-sided soft shading avoids holes where adjacent articulated surfaces overlap.
       const colors=face.normals.map((normal,index)=>{let n=normal;if(dot(n,view)<0)n=mul(n,-1);const diffuse=Math.max(0,dot(n,light)),rim=(1-Math.abs(dot(n,view)))**4,spec=Math.max(0,dot(n,unit(add(light,view))))**24,shade=.55+.5*diffuse+.25*rim;const rgb=[77,90,137].map((v,i)=>Math.round(Math.min(255,v*shade+rim*[57,67,108][i]+spec*40)));return {point:face.points[index],brightness:rgb[0],color:`rgb(${rgb.join(",")})`};}).sort((a,b)=>a.brightness-b.brightness);

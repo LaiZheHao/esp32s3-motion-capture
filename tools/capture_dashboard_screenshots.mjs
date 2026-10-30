@@ -13,8 +13,9 @@ const viewports=[
   {name:"direction-v2-1366x768.png",route:"calibration",step:3,width:1366,height:768},
   {name:"records-v2-1920x1080.png",route:"records",width:1920,height:1080},
   {name:"replay-v2-1920x1080.png",route:"replay",width:1920,height:1080},
-  {name:"mannequin-v4-front.png",route:"calibration",modelOnly:true,width:1920,height:1080},
-  {name:"mannequin-v4-oblique.png",route:"calibration",modelOnly:true,drag:90,width:1920,height:1080},
+  {name:"replay-v5-1366x768.png",route:"replay",width:1366,height:768},
+  {name:"mannequin-v5-front.png",route:"calibration",modelOnly:true,width:1920,height:1080},
+  {name:"mannequin-v5-oblique.png",route:"calibration",modelOnly:true,drag:90,width:1920,height:1080},
 ].filter(item=>!process.argv[5]||item.name.includes(process.argv[5]));
 
 const target=await fetch(`${endpoint}/json/new?${encodeURIComponent(pageUrl)}`,{method:"PUT"}).then(response=>{
@@ -62,6 +63,11 @@ for(const viewport of viewports) {
     returnByValue:true,
   });
   const metrics=result.result.value;
+  const readability=await command("Runtime.evaluate",{expression:"({smallText:[...document.querySelectorAll('body *')].filter(e=>!e.children.length&&e.textContent.trim()&&e.getClientRects().length&&parseFloat(getComputedStyle(e).fontSize)<13).map(e=>({text:e.textContent.trim().slice(0,25),size:getComputedStyle(e).fontSize})).slice(0,10),controls:(()=>{const e=document.querySelector('#replay-controls');return e?.getClientRects().length?{height:e.clientHeight,content:e.scrollHeight}:null})()})",returnByValue:true});
+  metrics.readability=readability.result.value;
+  if(metrics.readability.smallText.length)throw new Error("Visible text below 13px: "+JSON.stringify(metrics.readability.smallText));
+  const controls=metrics.readability.controls;
+  if(viewport.width>900&&controls&&controls.content>controls.height+1)throw new Error("Replay controls overflow vertically");
   if(errors.length)throw new Error(JSON.stringify(errors));
   if(viewport.width>900&&metrics.contentHeight>metrics.viewHeight+1)throw new Error("Desktop active view overflows vertically");
   if(metrics.scrollWidth>metrics.innerWidth||metrics.bodyWidth>metrics.innerWidth) {

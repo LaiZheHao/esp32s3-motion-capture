@@ -51,6 +51,7 @@ jobs:
           node tests/test_navigation.js
           node tests/test_session_archive.js
           node tests/test_mannequin.js
+          node tests/test_body_layers.js
       - name: Generate offline experiment reports
         run: |
           for preset in rigid_check upper_limb lower_limb bilateral; do

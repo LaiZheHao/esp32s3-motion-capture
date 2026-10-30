@@ -61,24 +61,35 @@
       }
       const segments=listSegments(frame);
       const bySegment=Object.fromEntries(segments.map(segment=>[segment.id||segment.slot,segment]));
+      // Internal skeleton is drawn before the translucent shell, so it is
+      // subdued by the glass rather than competing with the sensor markers.
+      ctx.save();ctx.lineCap="round";ctx.globalAlpha=.42;
+      for(const segment of segments){
+        const [start,end]=segmentEnds(segment,frame),a=project(translatePoint(start,rootOffset)),b=project(translatePoint(end,rootOffset));
+        line(a,b,"#b3c5e8",1.5);
+        const parent=bySegment[segment.parent];
+        if(parent){const [p0,p1]=segmentEnds(parent,frame),axis=p1.map((v,i)=>v-p0[i]),length=axis.reduce((sum,v)=>sum+v*v,0),t=length?Math.max(0,Math.min(1,axis.reduce((sum,v,i)=>sum+v*(start[i]-p0[i]),0)/length)):0,anchor=p0.map((v,i)=>v+axis[i]*t);line(project(translatePoint(anchor,rootOffset)),a,"#a4b8dc",1.3);}
+        ctx.fillStyle="#c4d2ed";for(const p of [a,b]){ctx.beginPath();ctx.arc(p[0],p[1],2.7,0,Math.PI*2);ctx.fill();}
+      }
+      ctx.restore();
       mannequin?.draw(ctx,segments.map(segment=>{const [start,end]=segmentEnds(segment,frame);return {...segment,start,end};}),project,{yaw:this.yaw,elevation:this.elevation,offset:rootOffset});
+      const markerCenters=segments.map(segment=>{const [start,end]=segmentEnds(segment,frame);return project(translatePoint(start.map((v,i)=>(v+end[i])/2),rootOffset));}),labelBoxes=[];
       let segmentIndex=0;
       for(const segment of segments) {
         segmentIndex++;
         const slot=segment.slot||segment.id||segment.body_slot,[start,end]=segmentEnds(segment,frame),a=project(translatePoint(start,rootOffset)),b=project(translatePoint(end,rootOffset)),status=segment.status||segment.state||(segment.measured?"measured":"unmeasured"),selected=slot===selectedSlot;
         const color=COLORS[status]||COLORS[segment.measured?"measured":"unmeasured"];
-        // The links between joint anchors are virtual geometry, not additional
-        // sampled segments. Connect to the nearest point on the parent bone.
-        const parent=bySegment[segment.parent];
         if(selected)line(a,b,"rgba(155,114,255,.5)",2,segment.measured?[]:[5,4]);
-        const node=[(a[0]+b[0])/2,(a[1]+b[1])/2],radius=selected?8:segment.measured?7:5;
-        ctx.save();ctx.shadowColor=selected?"#9873ff":color;ctx.shadowBlur=selected?22:segment.measured?15:4;ctx.fillStyle=selected?"#9b72ff":color;ctx.beginPath();ctx.arc(node[0],node[1],radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(210,220,255,.85)";ctx.lineWidth=1.5;ctx.stroke();
-        if(segment.measured||selected){ctx.shadowBlur=0;ctx.fillStyle="#f1f4ff";ctx.beginPath();ctx.arc(node[0],node[1],radius*.42,0,Math.PI*2);ctx.fill();}ctx.restore();
-        const labelX=node[0]+(node[0]<box.width/2-8?-29:14);ctx.save();ctx.fillStyle="rgba(7,10,21,.88)";ctx.strokeStyle="rgba(163,177,217,.5)";ctx.lineWidth=.8;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(labelX,node[1]-9,19,18,4);else ctx.rect(labelX,node[1]-9,19,18);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="11px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),labelX+9.5,node[1]);ctx.restore();
+        const node=[(a[0]+b[0])/2,(a[1]+b[1])/2],radius=selected?10:8,unmeasured=["missing","unmeasured"].includes(status),ringColor=unmeasured?"#8494de":selected?"#a18aff":color;
+        ctx.save();ctx.shadowColor=ringColor;ctx.shadowBlur=selected?20:segment.measured?15:6;ctx.fillStyle=unmeasured?"rgba(54,67,110,.8)":ringColor;ctx.beginPath();ctx.arc(node[0],node[1],radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle=unmeasured?"#a5b4ea":"#bec9ff";ctx.lineWidth=2;ctx.stroke();
+        if(segment.measured||selected){ctx.shadowBlur=0;ctx.fillStyle="#f6f8ff";ctx.beginPath();ctx.arc(node[0],node[1],radius*.42,0,Math.PI*2);ctx.fill();}ctx.restore();
+        const preferred=node[0]<box.width/2-8?-37:17;let labelX=node[0]+preferred,labelY=node[1]-11;
+        search:for(const dy of [0,-25,25,-50,50])for(const dx of [preferred,preferred===17?-37:17]){const x=node[0]+dx,y=node[1]-11+dy;if(x<2||x+23>box.width-2||y<32||y+22>box.height-2)continue;const overlaps=labelBoxes.some(r=>x<r.x+27&&x+27>r.x&&y<r.y+25&&y+25>r.y)||markerCenters.some((p,i)=>i!==segmentIndex-1&&p[0]>x-9&&p[0]<x+32&&p[1]>y-9&&p[1]<y+31);if(!overlaps){labelX=x;labelY=y;break search;}}
+        labelBoxes.push({x:labelX,y:labelY});if(Math.abs(labelY+11-node[1])>2)line(node,[labelX+11.5,labelY+11],"rgba(158,176,221,.5)",.8);
+        ctx.save();ctx.fillStyle="rgba(7,10,21,.92)";ctx.strokeStyle="rgba(163,177,217,.55)";ctx.lineWidth=.8;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(labelX,labelY,23,22,5);else ctx.rect(labelX,labelY,23,22);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="14px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),labelX+11.5,labelY+11);ctx.restore();
         this.hits.push({slot,device_id:segment.device_id,a,b});
-        if(selected){[[.1,0,0],[0,.1,0],[0,0,.1]].forEach((axis,i)=>{const delta=rotate(axis,segment.world_quaternion||[1,0,0,0]);line(a,project(translatePoint(start.map((v,j)=>v+delta[j]),rootOffset)),["#e66354","#279975","#397fd7"][i],2);});}
       }
-      ctx.font="12px system-ui";ctx.fillStyle="#8f9ab8";ctx.fillText(this.kind==="fixed"?`中性简化人台 · ${mode==="REPLAY"?"保存姿态回放":"实时姿态"}`:`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,23);
+      ctx.font="14px system-ui";ctx.fillStyle="#aab6d1";ctx.fillText(this.kind==="fixed"?`中性简化人台 · ${mode==="REPLAY"?"保存姿态回放":"实时姿态"}`:`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,25);
       if(!segments.length){ctx.fillText("等待骨架帧；未接入节点不推测动作",12,44);}
       if(this.kind==="translated"){ctx.fillStyle="#f0b45d";ctx.fillText("相机拖动只改变观察视角，不是测量平移",12,box.height-12);}
     }
