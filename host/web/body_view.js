@@ -1,6 +1,6 @@
 "use strict";
 (function(root) {
-  const COLORS={measured:"#087fad",online:"#087fad",initialized:"#087fad",uninitialized:"#b17a19",missing:"#aebbc4",unmeasured:"#aebbc4",stale:"#cc8a24",disconnected:"#b26464",conflict:"#c84646",invalid:"#c84646"};
+  const COLORS={measured:"#6679ff",online:"#6679ff",initialized:"#6679ff",uninitialized:"#f0b45d",missing:"#46506a",unmeasured:"#46506a",stale:"#f0b45d",disconnected:"#8c5360",conflict:"#ff6d78",invalid:"#ff6d78"};
   function listSegments(frame) {
     const source=frame?.segments||frame?.bones||{};
     return Array.isArray(source)?source:Object.entries(source).map(([slot,value])=>({slot,...value}));
@@ -29,7 +29,7 @@
   }
   class BodyView {
     constructor(canvas,{kind="fixed",onSelect=()=>{},anglePanel=null}={}) {
-      this.canvas=canvas;this.kind=kind;this.onSelect=onSelect;this.yaw=-.65;this.elevation=.35;this.zoom=1;this.pan=[0,0];this.trail=[];this.hits=[];this.epoch=null;
+      this.canvas=canvas;this.kind=kind;this.onSelect=onSelect;this.yaw=0;this.elevation=.18;this.zoom=1;this.pan=[0,0];this.trail=[];this.hits=[];this.epoch=null;
       this.anglePanel=anglePanel;this.angleKey=null;this.angleRows=[];
       let drag=null;
       canvas.addEventListener("pointerdown",event=>{drag={x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY,pan:event.shiftKey};canvas.setPointerCapture(event.pointerId);});
@@ -37,7 +37,7 @@
       canvas.addEventListener("pointerup",event=>{if(drag&&Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<5){const box=canvas.getBoundingClientRect(),point=[event.clientX-box.left,event.clientY-box.top];const found=this.hits.map(item=>({...item,d:pointSegmentDistance(point,item.a,item.b)})).sort((a,b)=>a.d-b.d)[0];if(found&&found.d<15)this.onSelect(found.slot,found.device_id);}drag=null;});
       canvas.addEventListener("pointercancel",()=>{drag=null;});
     }
-    reset(){this.yaw=-.65;this.elevation=.35;this.zoom=1;this.pan=[0,0];}
+    reset(){this.yaw=0;this.elevation=.18;this.zoom=1;this.pan=[0,0];}
     clearTrail(){this.trail=[];}
     draw(frame,{selectedSlot,devices=[],position=[0,0,0],positionSource="off",mode="LIVE",epoch=null}={}) {
       const canvas=this.canvas,box=canvas.getBoundingClientRect();if(!box.width||!box.height)return;
@@ -50,7 +50,7 @@
       const scale=Math.min(box.width*.34,box.height*.43)*this.zoom,origin=[box.width/2+this.pan[0],box.height*.89+this.pan[1]],rootOffset=this.kind==="translated"?vector(position):[0,0,0];
       const project=p=>root.PoseMath.project(vector(p),this.yaw,this.elevation,origin,scale);
       const line=(a,b,color,width=1,dash=[])=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([]);};
-      for(let i=-2;i<=2;i+=.25){line(project([i,-2,0]),project([i,2,0]),"#e3ebf0");line(project([-2,i,0]),project([2,i,0]),"#e3ebf0");}
+      for(let i=-2;i<=2;i+=.25){const major=Math.abs(i%1)<.001;line(project([i,-2,0]),project([i,2,0]),major?"rgba(101,116,190,.16)":"rgba(101,116,190,.07)");line(project([-2,i,0]),project([2,i,0]),major?"rgba(101,116,190,.16)":"rgba(101,116,190,.07)");}
       const o=project([0,0,0]);[[.35,0,0],[0,.35,0],[0,0,.35]].forEach((axis,i)=>{const end=project(axis);line(o,end,["#e66354","#279975","#397fd7"][i],2);ctx.fillStyle=["#e66354","#279975","#397fd7"][i];ctx.font="11px system-ui";ctx.fillText(["+X 前","+Y 左","+Z 上"][i],end[0]+4,end[1]);});
       if(this.kind==="translated"&&positionSource!=="off") {
         const previous=this.trail[this.trail.length-1];if(!previous||rootOffset.some((value,i)=>Math.abs(value-previous[i])>.001)){this.trail.push([...rootOffset]);if(this.trail.length>2000)this.trail.shift();}
@@ -58,22 +58,44 @@
       }
       const segments=listSegments(frame);
       const bySegment=Object.fromEntries(segments.map(segment=>[segment.id||segment.slot,segment]));
+      // Paint a soft, neutral mannequin envelope behind the measured skeleton.
+      // It follows the same live joint anchors and contains no anatomical detail.
+      ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.globalAlpha=.34;ctx.shadowColor="#5b6cff";ctx.shadowBlur=18;
+      const torsoIds=["left_upper_arm","right_upper_arm","right_thigh","left_thigh"],torso=torsoIds.map(id=>bySegment[id]).filter(Boolean);
+      if(torso.length===4){
+        const outline=torso.map(segment=>project(translatePoint(segmentEnds(segment,frame)[0],rootOffset)));
+        const fill=ctx.createLinearGradient?.(outline[0][0],outline[0][1],outline[2][0],outline[2][1]);
+        if(fill?.addColorStop){fill.addColorStop(0,"rgba(170,180,255,.62)");fill.addColorStop(1,"rgba(77,94,197,.24)");}
+        ctx.fillStyle=fill||"rgba(103,119,232,.34)";ctx.beginPath();outline.forEach((point,index)=>index?ctx.lineTo(point[0],point[1]):ctx.moveTo(point[0],point[1]));ctx.closePath();ctx.fill();
+      }
       for(const segment of segments) {
+        const slot=segment.slot||segment.id||segment.body_slot,[start,end]=segmentEnds(segment,frame),a=project(translatePoint(start,rootOffset)),b=project(translatePoint(end,rootOffset));
+        const torso=/pelvis|torso|chest/.test(slot),upper=/upper_arm|thigh/.test(slot),head=slot==="head";
+        const gradient=ctx.createLinearGradient?.(a[0],a[1],b[0],b[1]);
+        if(gradient?.addColorStop){gradient.addColorStop(0,"rgba(162,174,255,.68)");gradient.addColorStop(.5,"rgba(91,108,255,.32)");gradient.addColorStop(1,"rgba(151,163,240,.62)");}
+        ctx.strokeStyle=gradient||"rgba(112,126,255,.42)";ctx.lineWidth=torso?30:head?22:upper?20:16;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+        if(head){ctx.fillStyle="rgba(154,166,245,.32)";ctx.beginPath();ctx.ellipse(b[0],b[1]-9,12,17,0,0,Math.PI*2);ctx.fill();}
+      }
+      ctx.restore();
+      let segmentIndex=0;
+      for(const segment of segments) {
+        segmentIndex++;
         const slot=segment.slot||segment.id||segment.body_slot,[start,end]=segmentEnds(segment,frame),a=project(translatePoint(start,rootOffset)),b=project(translatePoint(end,rootOffset)),status=segment.status||segment.state||(segment.measured?"measured":"unmeasured"),selected=slot===selectedSlot;
         const color=COLORS[status]||COLORS[segment.measured?"measured":"unmeasured"];
         // The links between joint anchors are virtual geometry, not additional
         // sampled segments. Connect to the nearest point on the parent bone.
         const parent=bySegment[segment.parent];
-        if(parent){const [p0,p1]=segmentEnds(parent,frame),d=p1.map((v,i)=>v-p0[i]),n=d.reduce((sum,v)=>sum+v*v,0),t=n?Math.max(0,Math.min(1,d.reduce((sum,v,i)=>sum+v*(start[i]-p0[i]),0)/n)):0,anchor=p0.map((v,i)=>v+t*d[i]);if(Math.hypot(...anchor.map((v,i)=>v-start[i]))>1e-5)line(project(translatePoint(anchor,rootOffset)),a,"#aebbc4",2,[3,3]);}
-        line(a,b,selected?"#e7732e":color,selected?8:5,segment.measured?[]:[5,4]);
-        ctx.fillStyle=selected?"#e7732e":color;for(const point of [a,b]){ctx.beginPath();ctx.arc(point[0],point[1],selected?5:3,0,Math.PI*2);ctx.fill();}
+        if(parent){const [p0,p1]=segmentEnds(parent,frame),d=p1.map((v,i)=>v-p0[i]),n=d.reduce((sum,v)=>sum+v*v,0),t=n?Math.max(0,Math.min(1,d.reduce((sum,v,i)=>sum+v*(start[i]-p0[i]),0)/n)):0,anchor=p0.map((v,i)=>v+t*d[i]);if(Math.hypot(...anchor.map((v,i)=>v-start[i]))>1e-5)line(project(translatePoint(anchor,rootOffset)),a,"rgba(116,128,179,.4)",2,[3,3]);}
+        line(a,b,selected?"#9b72ff":color,selected?7:4,segment.measured?[]:[5,4]);
+        ctx.save();ctx.fillStyle=selected?"#9b72ff":color;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=selected?20:12;for(const point of [a,b]){ctx.beginPath();ctx.arc(point[0],point[1],selected?6:4,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(225,230,255,.8)";ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();
+        const center=[(a[0]+b[0])/2,(a[1]+b[1])/2];ctx.save();ctx.fillStyle="rgba(8,12,29,.88)";ctx.strokeStyle="rgba(143,157,255,.72)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(center[0]+10,center[1],8,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="9px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),center[0]+10,center[1]);ctx.restore();
         this.hits.push({slot,device_id:segment.device_id,a,b});
         if(slot==="head"){const face=rotate([.12,0,0],segment.world_quaternion||[1,0,0,0]),tip=end.map((v,i)=>v+face[i]);line(b,project(translatePoint(tip,rootOffset)),color,3);}
         if(selected){[[.1,0,0],[0,.1,0],[0,0,.1]].forEach((axis,i)=>{const delta=rotate(axis,segment.world_quaternion||[1,0,0,0]);line(a,project(translatePoint(start.map((v,j)=>v+delta[j]),rootOffset)),["#e66354","#279975","#397fd7"][i],2);});}
       }
-      ctx.font="12px system-ui";ctx.fillStyle="#526b7a";ctx.fillText(this.kind==="fixed"?"固定根部 · 仅姿态":`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,23);
+      ctx.font="12px system-ui";ctx.fillStyle="#8f9ab8";ctx.fillText(this.kind==="fixed"?"中性简化人台 · 实时姿态":`独立位置来源：${positionSource==="off"?"关闭":positionSource}`,12,23);
       if(!segments.length){ctx.fillText("等待骨架帧；未接入节点不推测动作",12,44);}
-      if(this.kind==="translated"){ctx.fillStyle="#9a681a";ctx.fillText("相机拖动只改变观察视角，不是测量平移",12,box.height-12);}
+      if(this.kind==="translated"){ctx.fillStyle="#f0b45d";ctx.fillText("相机拖动只改变观察视角，不是测量平移",12,box.height-12);}
     }
     drawAngles(devices,mode) {
       const panel=this.anglePanel;if(!panel)return;
@@ -102,11 +124,11 @@
     }
     drawBoards(ctx,box,devices,selectedSlot) {
       const shown=devices.length?devices:[],columns=shown.length>4?4:shown.length>1?2:1,rows=Math.max(1,Math.ceil(shown.length/columns)),cellW=box.width/columns,cellH=box.height/rows;
-      if(!shown.length){ctx.font="13px system-ui";ctx.fillStyle="#617482";ctx.fillText("暂无设备。模拟设备会显式标识，不计为硬件在线。",18,28);return;}
+      if(!shown.length){ctx.font="13px system-ui";ctx.fillStyle="#9ba6c2";ctx.fillText("暂无设备。模拟设备会显式标识，不计为硬件在线。",18,28);return;}
       shown.forEach((device,index)=>{const cx=(index%columns+.5)*cellW,cy=(Math.floor(index/columns)+.49)*cellH,s=Math.min(cellW*.9,cellH*1.8),q=device.quaternion||device.q||[1,0,0,0],slot=device.body_slot||device.slot,points=[[-.18,-.12,0],[.18,-.12,0],[.18,.12,0],[-.18,.12,0]].map(v=>rotate(v,q)).map(v=>root.PoseMath.project(v,this.yaw,this.elevation,[cx,cy],s));
-        ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p.slice(0,2)):ctx.moveTo(...p.slice(0,2)));ctx.closePath();ctx.fillStyle=device.source==="real"?"#c1e0ee":"#f4dca8";ctx.fill();ctx.strokeStyle=slot===selectedSlot?"#e7732e":"#4a8ba6";ctx.lineWidth=slot===selectedSlot?3:1.5;ctx.stroke();
+        ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p.slice(0,2)):ctx.moveTo(...p.slice(0,2)));ctx.closePath();ctx.fillStyle=device.source==="real"?"rgba(91,108,255,.42)":"rgba(240,180,93,.32)";ctx.fill();ctx.strokeStyle=slot===selectedSlot?"#9b72ff":"#7183ff";ctx.lineWidth=slot===selectedSlot?3:1.5;ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0;
         [[.25,0,0],[0,.25,0],[0,0,.25]].forEach((axis,i)=>{const tip=root.PoseMath.project(rotate(axis,q),this.yaw,this.elevation,[cx,cy],s);ctx.strokeStyle=["#e66354","#279975","#397fd7"][i];ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(...tip.slice(0,2));ctx.stroke();ctx.fillStyle=["#e66354","#279975","#397fd7"][i];ctx.fillText("s"+"XYZ"[i],tip[0]+3,tip[1]);});
-        ctx.font="11px system-ui";ctx.fillStyle="#163044";ctx.textAlign="center";ctx.fillText(String(device.device_id||device.node_id||device.id||"未识别").slice(0,27),cx,(Math.floor(index/columns)+1)*cellH-24);ctx.fillStyle=device.source==="real"?"#617482":"#9a681a";ctx.fillText(`${slot||"未绑定"} · ${device.source==="real"?"真实输入":"模拟"}`,cx,(Math.floor(index/columns)+1)*cellH-8);ctx.textAlign="left";
+        ctx.font="11px system-ui";ctx.fillStyle="#eef1ff";ctx.textAlign="center";ctx.fillText(String(device.device_id||device.node_id||device.id||"未识别").slice(0,27),cx,(Math.floor(index/columns)+1)*cellH-24);ctx.fillStyle=device.source==="real"?"#9ba6c2":"#f0b45d";ctx.fillText(`${slot||"未绑定"} · ${device.source==="real"?"真实输入":"模拟"}`,cx,(Math.floor(index/columns)+1)*cellH-8);ctx.textAlign="left";
         this.hits.push({slot,device_id:device.device_id||device.node_id||device.id,a:[cx-cellW*.4,cy],b:[cx+cellW*.4,cy]});
       });
     }

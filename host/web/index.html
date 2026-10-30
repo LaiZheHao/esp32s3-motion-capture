@@ -1,92 +1,211 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IMU 动作捕捉开发台</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/static/style.css"></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080b16">
+  <title>IMU 动作捕捉开发台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
 <body>
-  <header><div><span class="eyebrow">山东大学 · 动作采集 / 兼容原单节点开发台</span><h1>IMU 动作捕捉开发台</h1></div><span id="socketState" class="badge">正在连接服务</span></header>
-<section class="connection panel">
-    <label>通信方式<select id="transport"><option value="wifi">Wi-Fi TCP</option><option value="serial">USB 串口</option></select></label>
-    <label id="hostField">ESP32 地址<input id="host" value="192.168.4.1" placeholder="ESP32 热点 IP 或串口日志中的 IP"></label>
-    <label id="portField">TCP 端口<input id="tcpPort" type="number" min="1" max="65535" value="9000"></label>
-    <label id="serialField" hidden>串口<select id="serialPort"><option>COM9</option></select></label>
-    <button id="refreshPorts" hidden>刷新串口</button><button id="connect" class="primary">连接设备</button>
-    <label>端点名称<input id="endpointName" value="node-1" maxlength="40" placeholder="仅用于区分连接"></label>
-    <p id="message" role="status">等待连接。热点配置见 firmware/include/wifi_config.example.h；端口与地址不代表物理身份。</p>
-  </section>
-<section class="panel body-connections"><div class="heading"><h2>端点、身份与身体位置</h2><span id="bodyMode" class="badge">LIVE · 等待输入</span></div>
-    <div id="bodyEndpoints" class="endpoint-list" aria-live="polite"></div>
-    <div class="binding-controls"><label>物理设备<select id="bodyDevice"><option value="">等待身份数据</option></select></label><label>身体骨段<select id="bodyBinding"></select></label><button id="bodyBind">显式临时覆盖绑定</button><button id="bodyBindingClear">清除覆盖</button></div>
-    <div class="binding-controls"><label>选中设备的主来源<select id="bodyPrimarySource"><option value="">等待端点身份</option></select></label><button id="bodyChooseSource">切换主来源并撤销初始化</button><button id="bodyRewear">重新佩戴 / 重置参考</button></div>
-    <p class="hint">IMU2 / 旧 CSV 无身体位置，须明确绑定。覆盖只在电脑端生效，并进入记录；重复位置报警且隔离，不自动覆盖。手部/足部须固定在对应刚体上，不能由腕近端或踝上方位置推定。</p>
-  </section>
-<div id="commandFeedback" class="command-feedback" role="status" hidden><span id="commandFeedbackText"></span><button id="commandFeedbackClose" type="button" aria-label="关闭操作提示">关闭</button></div>
-<div class="operation-grid"><section class="panel pose"><div class="heading"><h2>选中设备详细检测</h2><span id="nodeState" class="badge">等待数据</span></div><p id="bodySelectedDetails" class="hint">先在设备表或槽位列表选择物理设备；不默认绑定右腕。</p>
-      <div class="buttons"><label>选中设备融合策略<select id="bodyProcessing"></select></label><button id="bodyApplyProcessing">应用并撤销安装参考</button><label class="checkbox"><input id="bodyHold" type="checkbox" checked>校准后停稳保持（慢动作诊断可关闭）</label></div>
-      <p id="bodyProcessingStatus" class="hint">重力向量校正不等于消除长期航向漂移；伙伴轴映射仅供核对，不会自动覆盖本机设置。</p>
-
-      <div class="angles"><div>Roll<span id="roll">—</span></div><div>Pitch<span id="pitch">—</span></div><div>Yaw<span id="yaw">—</span></div></div>
-      <div class="buttons"><button id="zero">站姿初始化向导</button><button id="calibrate">选中设备静置零偏校准</button><button id="cancelCalibration">取消零偏校准</button><button id="viewReset">重置设备观察视角</button></div>
-      <p id="calibration" class="hint">校准前保持板子静止；姿态归零设置当前参考方向。</p>
-      <details class="selected-model"><summary>选中设备板卡视图 / 实验轨迹</summary><div class="angles"><div>位置 X / m<span id="poseX">—</span></div><div>位置 Y / m<span id="poseY">—</span></div><div>位置 Z / m<span id="poseZ">—</span></div></div>      <canvas id="poseCanvas" aria-label="三维位置姿态与运动轨迹"></canvas>
-      <div class="view-tools"><label>模型缩放<input id="poseZoom" type="range" min="0.5" max="2" step="0.05" value="1"></label><label>视野半径 / m<input id="sceneRange" type="number" min="0.1" max="20" step="0.1" value="1"></label><label class="checkbox"><input id="showTrail" type="checkbox" checked>轨迹</label><label class="checkbox"><input id="followPose" type="checkbox">跟随模型</label><button id="clearTrail">清除轨迹</button></div>
-      <p class="hint">红 X · 绿 Y · 蓝 Z ｜ 网格与位置单位：米 ｜ 模型为放大示意 ｜ 拖动旋转 · 使用缩放滑条</p>
-</details><p id="poseQuality" class="hint">位置为惯性估算；模型平移与姿态旋转使用同一参考坐标。方向标定状态见右侧；磁场质量与漂移仍需检查。</p>
-    <div class="heading"><h2>数据与接收质量</h2><span id="nodeId" class="badge">未选择设备</span></div>
-      <div class="metrics"><div>接收频率<span id="rate">0 Hz</span></div><div id="lossLabel">序号缺帧率<span id="loss">—</span></div><div>最新包龄<span id="age">—</span></div><div>无效帧<span id="invalid">0</span></div><div>帧序号<span id="sequence">—</span></div><div>设备采样时间<span id="deviceTime">—</span></div></div>
-      <table class="values"><thead><tr><th>传感器</th><th>X</th><th>Y</th><th>Z</th></tr></thead><tbody><tr><th>加速度 / g</th><td id="ax">—</td><td id="ay">—</td><td id="az">—</td></tr><tr><th>角速度 / °/s</th><td id="gx">—</td><td id="gy">—</td><td id="gz">—</td></tr><tr><th>磁场 / mG</th><td id="mx">—</td><td id="my">—</td><td id="mz">—</td></tr></tbody></table>
-      <p class="hint" id="temperature">温度 —</p><p id="sensorStatus" class="hint">传感器状态 —</p><details class="node-diagnostics"><summary>节点分层诊断与参考状态</summary><pre id="bodyDiagnosticLayers">等待选择设备</pre></details>
-      <div class="buttons"><button id="record" class="primary">开始记录</button><button id="records">记录与回放</button></div><p id="recordStatus" class="hint">记录会保存每个接收样本，界面曲线约 20 Hz 刷新。</p>
-    </section>
-<section class="panel direction-panel" aria-labelledby="directionTitle">
-    <div class="heading"><h2 id="directionTitle">安装与方向标定</h2><span id="directionState" class="badge">尚未开始</span></div>
-    <p class="hint">先确认角色与人体前方；本向导用于上臂 / 前臂 / 手。手部传感器固定在手背，标定时手腕保持中立、手与前臂对齐并一起前举。点击后有 2 秒准备时间，再自动寻找约 1.3 秒的稳定数据；允许轻微自然晃动，最多等待 15 秒，无需反复点击。新采中立会撤销旧参考。</p>
-    <div id="directionDevices" class="direction-devices"></div>
-    <div class="direction-steps">
-      <div class="pose-step"><strong>1 · 中立定姿</strong><p>躯干不动，手臂自然下垂；标定手部时手腕保持中立，手与前臂对齐。停稳后采样。</p><button id="directionNeutralStart" class="primary">采样中立姿态</button></div>
-      <div class="pose-step"><strong>2 · 前举定姿</strong><p>保持肘伸直、手腕中立，手随前臂一起向人体正前方抬起并停稳。不用摆准角度，也不用放回。</p><button id="directionForwardStart" class="primary">采样前举姿态</button></div>
-      <div class="buttons"><button id="directionApply">应用标定结果</button><button id="directionCancel">结束本轮并调整设备</button></div>
+<div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+<div class="app-shell">
+  <nav class="primary-nav glass" aria-label="一级导航">
+    <a class="brand-mark" href="#overview" aria-label="IMU 动作捕捉首页"><span>IMU</span></a>
+    <div class="nav-links">
+      <a class="nav-item active" href="#overview"><span class="nav-icon">⌂</span><span>总览</span></a>
+      <a class="nav-item" href="#devices"><span class="nav-icon">⌁</span><span>设备</span></a>
+      <a class="nav-item" href="#calibration-workspace"><span class="nav-icon">◎</span><span>标定</span></a>
+      <a class="nav-item" href="#telemetry"><span class="nav-icon">⌁</span><span>数据</span></a>
+      <a class="nav-item" href="#recording"><span class="nav-icon">▣</span><span>记录</span></a>
+      <a class="nav-item" href="#advanced"><span class="nav-icon">⚙</span><span>高级</span></a>
     </div>
-    <p id="directionMessage" class="step-status" role="status">选择设备后，先采中立姿态。</p><p id="directionScope" class="hint"></p>
-    <div id="directionResults" class="direction-results" aria-live="polite"></div>
-    <p class="hint">应用后验证侧举、再次前举和独立屈肘；前臂与手组合还需验证前臂稳定时的独立屈伸腕。此标定对齐安装与动作方向，不消除漂移；停稳保持不代表无漂移。</p>
-    <details class="node-diagnostics"><summary>质量、变换与采样详情</summary><pre id="directionDetails">尚无记录</pre></details>
-    <details class="simple-init"><summary>仅中立归零（不标定动作方向）</summary><div class="heading"><span id="bodyInitStatus" class="badge">未初始化</span></div><p class="hint">直立、双臂下垂、双足朝前。重做会撤销安装方向标定。</p><div class="buttons"><button id="bodyInitBegin">准备中立归零</button><button id="bodyInitConfirm">我已站稳，采集参考</button></div><p id="bodyInitDetails" class="hint"></p></details>
-  </section></div>
-<section class="panel body-panel"><div class="heading"><div><span class="eyebrow">姿态主链 · 十四槽位 / 单躯干近似</span><h2>骨架与设备诊断</h2></div><span id="bodyCounts" class="badge">硬件有效 0</span></div>
-    <p id="bodyRenderStatus" class="hint">模型显示刷新率将在运行后显示；接收频率见设备质量。</p>
-    <div class="body-toolbar"><label>显示窗口<select id="bodyViewMode"><option value="all">骨架与板卡</option><option value="fixed">固定根部火柴人</option><option value="translated">可平移火柴人与轨迹</option><option value="boards">各板子与坐标轴</option></select></label><button id="bodyResetViews">重置观察视角</button><button id="bodyClearTrail">清除显示轨迹</button></div>
-    <div class="body-layout"><div id="bodyViews" class="body-views"><article data-view="fixed"><h3>固定根部 · 仅姿态</h3><p class="hint">右手人体坐标：+X 前（脚尖）· +Y 左 · +Z 上；默认从正面右前方观察，人物右臂在画面左侧。橙色仅表示选中骨段。</p><canvas id="bodyFixed" aria-label="固定根部火柴人，可点击骨段选择"></canvas><label class="model-zoom">模型缩放<input type="range" data-zoom="bodyFixed" min="0.45" max="2.8" value="1" step="0.05" aria-label="bodyFixed 模型缩放"></label></article><article data-view="translated" hidden><h3>可平移 · 独立位置来源</h3><canvas id="bodyTranslated" aria-label="独立位置来源的火柴人与轨迹"></canvas><label class="model-zoom">模型缩放<input type="range" data-zoom="bodyTranslated" min="0.45" max="2.8" value="1" step="0.05" aria-label="bodyTranslated 模型缩放"></label></article><article data-view="boards"><h3>各设备 · 独立姿态与轴</h3><canvas id="bodyBoards" aria-label="所有设备板状姿态与坐标轴"></canvas><div id="bodyBoardAngles" class="board-angles" aria-label="各设备三轴姿态角"></div><p class="hint">姿态角 / ° · X 横滚（Roll）· Y 俯仰（Pitch）· Z 航向（Yaw）；ZYX 欧拉角，相对于当前姿态参考，不累计转圈。</p></article></div><aside><h3>身体槽位 <span class="hint">点击列表 / 骨段联动选择</span></h3><div id="bodySlots" class="body-slots"></div></aside></div>
-    <p class="hint">X 向前 · Y 向左 · Z 向上 · 四元数 wxyz。灰色虚线表示未测量：局部零姿态，仅随父段移动。短时失鲜保留最后局部姿态并告警。胸廓随骨盆，不能独立还原胸骨盆扭转、脊柱、肩胛或手指。</p>
-    <p class="hint">拖动旋转相机 · Shift+拖动平移相机 · 使用各视图下方的缩放滑条。相机平移只改变观察位置，不是人体测量平移；固定根部视图不使用位置积分。</p>
-    <details><summary>实验位置来源</summary><div class="body-position"><label>位置来源<select id="bodyPositionSource"><option value="off">关闭</option><option value="experimental">实验惯性估算 · 会漂移</option></select></label><button id="bodyPositionApply">应用位置来源</button></div>
-    <p id="bodyPositionStatus" class="hint">位置来源关闭。纯 IMU 不能提供可靠绝对定位。</p></details>
-  </section>
-<section class="panel body-recording"><div class="heading"><h2>完整动作会话 · 记录与回放</h2><span id="bodyRecordState" class="badge">未录制</span></div><div class="buttons"><button id="bodyRecord" class="primary">开始记录</button><button id="bodyRefreshSessions">刷新列表</button><select id="bodySessions" aria-label="完整动作记录会话"><option value="">请选择已保存会话</option></select><button id="bodyReplayOpen">加载回放</button><button id="bodyReplayPlay">播放</button><button id="bodyReplayPause">暂停</button><button id="bodyReplayClose">返回实时</button></div><div class="body-seek"><input id="bodyReplaySeek" type="range" min="0" max="0" value="0" step="0.01" aria-label="完整动作回放时间"><span id="bodyReplayTime">0 / 0 s</span></div><p id="bodyRecordDetails" class="hint" role="status">会话保存到 host/recordings；包含原始采样、融合、实际骨架帧和配置。默认重现保存姿态，不用新算法悄悄重算。录制与回放互斥；回放时实时输入不覆盖模型。</p></section>
-<div class="advanced-grid"><details class="advanced-panel"><summary>实验位置跟踪</summary><section class="panel motion-panel"><div class="heading"><h2>位姿跟踪与漂移抑制</h2><span id="motionPhase" class="badge">未开始</span></div>
-      <div class="buttons"><label>跟踪方式<select id="motionDuration"><option value="0">连续跟踪</option><option value="10">10 秒片段</option><option value="30">30 秒片段</option></select></label><label>漂移抑制<select id="driftMode"><option value="faithful">运动优先</option><option value="balanced" selected>均衡</option><option value="stable">稳定优先</option></select></label><button id="startMotion" class="primary">继续位置跟踪</button><button id="stopMotion">暂停位置跟踪</button><button id="resetMotion">位置归零</button></div>
-      <label class="checkbox"><input id="motionZupt" type="checkbox" checked>停稳自动锁定位置并归零速度（匀速/恒定加速平移可能误判）</label>
-      <p id="motionMessage" class="hint" role="status">开始后先静置约 1 秒，提示估算中后再移动。</p>
-      <p id="restDiagnostics" class="hint">静止检测使用原始传感器窗口，不依赖扣除重力后的误差。</p>
-      <div class="metrics"><div>位置 X / m<span id="dx">—</span></div><div>位置 Y / m<span id="dy">—</span></div><div>位置 Z / m<span id="dz">—</span></div><div>距原点距离 / m<span id="distance">—</span></div><div>速度模长 / m/s<span id="speed">—</span></div><div>跟踪时长 / s<span id="motionElapsed">0</span></div></div>
-      <p id="linearAccel" class="hint">扣除重力后的线性加速度：—</p>
-      <p class="hint">连接后先静置约 1 秒，随后位置和姿态一起连续显示。静止时锁定位置并校正速度；均衡/稳定优先模式还会衰减速度，抑漂更强但可能缩小真实位移。轨迹保留最近 2000 个显示点；完整数据可记录导出。纯 IMU 无法消除长期位置漂移。</p>
-      <p class="hint">需要调整跟踪方式、模式或静止修正开关时，先暂停位置跟踪，再调整并继续。暂停期间姿态仍实时更新。</p>
-    </section></details>
-<details class="advanced-panel"><summary>坐标轴设置（更改后需重标定）</summary><section class="panel coordinates-panel"><div class="heading"><h2>坐标轴与方向设置</h2><span id="coordinateSummary" class="badge">默认右手系</span></div>
-      <p class="hint">输出轴对应哪个原始传感器轴？加速度、角速度、磁场和姿态会统一使用此映射。</p>
-      <div class="axis-controls"><label>输出 X ← 原始轴<select id="mapX"><option>+X</option><option>-X</option><option>+Y</option><option>-Y</option><option>+Z</option><option>-Z</option></select></label><label>输出 Y ← 原始轴<select id="mapY"><option>+X</option><option>-X</option><option selected>+Y</option><option>-Y</option><option>+Z</option><option>-Z</option></select></label><label>输出 Z ← 原始轴<select id="mapZ"><option>+X</option><option>-X</option><option>+Y</option><option>-Y</option><option selected>+Z</option><option>-Z</option></select></label></div>
-      <p class="hint">姿态解算需右手系：每个原始轴使用一次；例如同时翻转 X、Y 可以。仅反转一个传感器轴会被拒绝。</p>
-      <p class="hint">场景统一使用人体 X前 / Y左 / Z上；下面的位移符号只调整实验位置，不镜像姿态模型。</p>
-      <div class="axis-controls"><label>实验位移 X 符号<select id="signX"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label><label>实验位移 Y 符号<select id="signY"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label><label>实验位移 Z 符号<select id="signZ"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label></div>
-      <div class="buttons"><button id="applyCoordinates" class="primary">应用选中设备坐标设置</button><button id="defaultCoordinates">恢复默认坐标</button></div>
-      <p class="hint">位移符号仅作用于实验位置，不翻转模型或姿态坐标；默认均为正。应用仅改变选中设备的当前运行配置，重置姿态参考和位移估算，需重新初始化；记录或回放期间不可更改。坐标配置和原始采样保存到动作会话；重启后默认取身体配置文件。</p>
-    </section></details>
-<details class="advanced-panel"><summary>选中设备实时曲线</summary><section class="panel signals"><div class="heading"><h2>三轴实时曲线</h2><span class="legend"><i class="x">X</i><i class="y">Y</i><i class="z">Z</i></span></div>
-      <div class="chart"><label>加速度 / g</label><canvas id="accChart"></canvas></div>
-      <div class="chart"><label>角速度 / °/s</label><canvas id="gyroChart"></canvas></div>
-      <div class="chart"><label>磁场 / mG</label><canvas id="magChart"></canvas></div>
-    </section></details></div>
-  <section id="playback" class="panel playback" hidden><strong id="playTitle">记录回放</strong><div class="buttons"><button id="play">播放</button><input id="seek" type="range" min="0" value="0"><span id="playTime">0 / 0 s</span><button id="exitReplay">返回实时</button></div><p id="playSummary" class="hint"></p></section>
-  <footer>十四槽位开发台 · 页面资源离线可用 · 实板效果由用户验证 · 近似软件对齐，非硬件同步 · 不提供可靠绝对定位或精确解剖关节角</footer>
-  <dialog id="recordDialog"><div class="heading"><h2>记录与回放</h2><button id="closeDialog">关闭</button></div><div class="buttons"><select id="sessions" aria-label="记录会话"></select><button id="preview">预览</button><button id="loadReplay">加载回放</button><button id="download">导出 ZIP</button></div><p id="sessionInfo" class="hint"></p><div class="tableScroll"><table id="previewTable"></table></div></dialog>
-  <script src="/static/pose_math.js" defer></script><script src="/static/body_view.js" defer></script><script src="/static/app.js" defer></script><script src="/static/direction_app.js" defer></script><script src="/static/body_app.js" defer></script>
-</body></html>
+    <span class="nav-version">V1</span>
+  </nav>
+
+  <div class="app-main">
+    <header class="topbar glass">
+      <div class="title-block"><span class="eyebrow">ESP32-S3 · 十四节点惯性动作采集</span><h1>IMU 动作捕捉</h1></div>
+      <div class="top-status">
+        <span id="socketState" class="badge status-pill"><i></i>正在连接服务</span>
+        <span id="bodyMode" class="badge">LIVE · 等待输入</span>
+        <span id="bodyCounts" class="badge">硬件有效 0</span>
+      </div>
+    </header>
+
+    <div id="commandFeedback" class="command-feedback glass" role="status" hidden>
+      <span id="commandFeedbackText"></span><button id="commandFeedbackClose" type="button" aria-label="关闭操作提示">关闭</button>
+    </div>
+
+    <main>
+      <section id="overview" class="dashboard-grid">
+        <aside class="device-rail">
+          <section class="glass compact-card connection" id="devices">
+            <div class="section-heading"><div><span class="kicker">DEVICE</span><h2>设备连接</h2></div><span class="mini-orb"></span></div>
+            <div class="connection-fields">
+              <label>通信方式<select id="transport"><option value="wifi">Wi-Fi TCP</option><option value="serial">USB 串口</option></select></label>
+              <label id="hostField">ESP32 地址<input id="host" value="192.168.4.1" placeholder="热点 IP 或局域网 IP"></label>
+              <label id="portField">TCP 端口<input id="tcpPort" type="number" min="1" max="65535" value="9000"></label>
+              <label id="serialField" hidden>串口<select id="serialPort"><option>COM9</option></select></label>
+              <button id="refreshPorts" class="secondary" hidden>刷新串口</button>
+              <label>端点名称<input id="endpointName" value="node-1" maxlength="40" placeholder="用于区分连接"></label>
+              <button id="connect" class="primary connect-button">连接 / 添加端点</button>
+            </div>
+            <p id="message" class="status-copy" role="status">等待连接；请先确认端口与设备身份。</p>
+            <div id="bodyEndpoints" class="endpoint-list" aria-live="polite"></div>
+          </section>
+
+          <section class="glass compact-card slots-card">
+            <div class="section-heading"><div><span class="kicker">BODY MAP</span><h2>身体节点</h2></div><span class="node-count">14</span></div>
+            <p class="subtle">点击节点选择设备与骨段</p>
+            <div id="bodySlots" class="body-slots"></div>
+          </section>
+        </aside>
+
+        <section class="glass hero-panel body-panel">
+          <div class="section-heading hero-heading">
+            <div><span class="kicker">LIVE POSE</span><h2>实时人体姿态</h2></div>
+            <div class="body-toolbar">
+              <label class="compact-select">视图<select id="bodyViewMode"><option value="fixed" selected>人体姿态</option><option value="boards">板卡姿态</option><option value="translated">实验轨迹</option><option value="all">组合视图</option></select></label>
+              <button id="bodyResetViews" class="icon-button" title="重置观察视角">↻</button>
+              <button id="bodyClearTrail" class="icon-button" title="清除显示轨迹">⌫</button>
+            </div>
+          </div>
+          <div id="bodyViews" class="body-views single-view">
+            <article data-view="fixed" class="pose-stage">
+              <canvas id="bodyFixed" aria-label="中性简化人体与十四节点，可点击骨段选择"></canvas>
+              <div class="stage-caption"><span>拖动旋转 · Shift+拖动平移</span><label class="model-zoom">缩放<input type="range" data-zoom="bodyFixed" min="0.45" max="2.8" value="1" step="0.05" aria-label="人体模型缩放"></label></div>
+            </article>
+            <article data-view="translated" class="pose-stage" hidden>
+              <canvas id="bodyTranslated" aria-label="独立位置来源的人体与轨迹"></canvas>
+              <label class="model-zoom">实验轨迹缩放<input type="range" data-zoom="bodyTranslated" min="0.45" max="2.8" value="1" step="0.05"></label>
+            </article>
+            <article data-view="boards" class="pose-stage" hidden>
+              <canvas id="bodyBoards" aria-label="所有设备板状姿态与坐标轴"></canvas>
+              <div id="bodyBoardAngles" class="board-angles" aria-label="各设备三轴姿态角"></div>
+            </article>
+          </div>
+          <div class="hero-footer"><p id="bodyRenderStatus">等待实时骨架帧</p><span>+X 前 · +Y 左 · +Z 上</span></div>
+        </section>
+
+        <aside class="status-rail">
+          <section class="glass status-card quality-card">
+            <div class="section-heading"><div><span class="kicker">SIGNAL</span><h2>接收质量</h2></div><span id="nodeId" class="badge">未选择设备</span></div>
+            <div class="quality-layout">
+              <div class="quality-ring"><div><strong id="rate">0 Hz</strong><span>实时捕捉</span></div></div>
+              <div class="quality-metrics">
+                <div><span id="lossLabel">序号缺帧率</span><strong id="loss">—</strong><i class="meter"><b></b></i></div>
+                <div><span>最新包龄</span><strong id="age">—</strong><i class="meter good"><b></b></i></div>
+              </div>
+            </div>
+            <div class="mini-stats"><div><span>无效帧</span><strong id="invalid">0</strong></div><div><span>帧序号</span><strong id="sequence">—</strong></div><div><span>采样时间</span><strong id="deviceTime">—</strong></div></div>
+          </section>
+
+          <section class="glass status-card selected-device-card">
+            <div class="section-heading"><div><span class="kicker">DEVICE STATE</span><h2>设备状态</h2></div><span id="nodeState" class="badge">等待数据</span></div>
+            <p id="bodySelectedDetails" class="device-summary">尚未选择设备。IP/COM 只表示连接地址。</p>
+            <div class="angles"><div><span>ROLL</span><strong id="roll">—</strong></div><div><span>PITCH</span><strong id="pitch">—</strong></div><div><span>YAW</span><strong id="yaw">—</strong></div></div>
+            <div class="sensor-strip"><span id="temperature">温度 —</span><span id="sensorStatus">传感器状态 —</span></div>
+          </section>
+
+          <section class="glass status-card calibration-card">
+            <div class="section-heading"><div><span class="kicker">CALIBRATION</span><h2>标定状态</h2></div><span id="directionState" class="badge">尚未开始</span></div>
+            <div class="calibration-progress" aria-hidden="true"><i class="done">1</i><b></b><i>2</i><b></b><i>3</i><b></b><i>4</i></div>
+            <div class="calibration-actions"><button id="calibrate" class="primary">静置零偏校准</button><button id="cancelCalibration">取消校准</button><button id="zero">站姿初始化</button></div>
+            <p id="calibration" class="status-copy">保持板子静止，等待稳定窗口。</p>
+            <span id="bodyInitStatus" class="badge inset-badge">未初始化</span>
+          </section>
+        </aside>
+      </section>
+
+      <section id="telemetry" class="glass telemetry-dock">
+        <div class="section-heading telemetry-heading"><div><span class="kicker">TELEMETRY</span><h2>实时传感器曲线</h2></div><span class="legend"><i class="x">● X</i><i class="y">● Y</i><i class="z">● Z</i></span></div>
+        <div class="telemetry-grid">
+          <article class="chart-card"><h3>加速度 <small>g</small></h3><canvas id="accChart"></canvas></article>
+          <article class="chart-card"><h3>角速度 <small>°/s</small></h3><canvas id="gyroChart"></canvas></article>
+          <article class="chart-card"><h3>磁场 <small>mG</small></h3><canvas id="magChart"></canvas></article>
+          <article id="recording" class="record-card">
+            <span id="bodyRecordState" class="badge">未录制</span>
+            <button id="bodyRecord" class="record-button"><i></i>开始记录</button>
+            <div class="record-controls"><button id="bodyRefreshSessions">刷新</button><select id="bodySessions" aria-label="完整动作记录会话"><option value="">选择会话</option></select></div>
+            <div class="record-controls"><button id="bodyReplayOpen">加载</button><button id="bodyReplayPlay">播放</button><button id="bodyReplayPause">暂停</button><button id="bodyReplayClose">实时</button></div>
+            <div class="body-seek"><input id="bodyReplaySeek" type="range" min="0" max="0" value="0" step="0.01"><span id="bodyReplayTime">0 / 0 s</span></div>
+          </article>
+        </div>
+        <p id="bodyRecordDetails" class="status-copy" role="status">会话包含原始采样、融合、实际骨架帧和配置。</p>
+      </section>
+
+      <section id="devices-workspace" class="workspace-section glass body-connections">
+        <div class="section-heading"><div><span class="kicker">DEVICE MANAGEMENT</span><h2>设备身份与身体绑定</h2></div></div>
+        <div class="workspace-grid">
+          <div><div class="binding-controls"><label>物理设备<select id="bodyDevice"><option value="">等待身份数据</option></select></label><label>身体骨段<select id="bodyBinding"></select></label><button id="bodyBind" class="primary">应用临时绑定</button><button id="bodyBindingClear">清除覆盖</button></div></div>
+          <div><div class="binding-controls"><label>选中设备的主来源<select id="bodyPrimarySource"><option value="">等待端点身份</option></select></label><button id="bodyChooseSource">切换来源并撤销初始化</button><button id="bodyRewear">重新佩戴 / 重置参考</button></div></div>
+        </div>
+        <p class="subtle">旧协议数据须明确绑定。重复位置会报警并隔离，不自动覆盖。</p>
+      </section>
+
+      <section id="calibration-workspace" class="workspace-section glass direction-panel" aria-labelledby="directionTitle">
+        <div class="section-heading"><div><span class="kicker">GUIDED CALIBRATION</span><h2 id="directionTitle">安装与方向标定</h2></div></div>
+        <div class="calibration-layout">
+          <div class="calibration-devices"><h3>选择参与设备</h3><div id="directionDevices" class="direction-devices"></div><p id="directionScope" class="subtle"></p></div>
+          <div class="direction-steps">
+            <div class="pose-step"><span>01</span><strong>中立定姿</strong><p>躯干稳定、手臂自然下垂，手腕保持中立。</p><button id="directionNeutralStart" class="primary">采样中立姿态</button></div>
+            <div class="pose-step"><span>02</span><strong>前举定姿</strong><p>肘伸直，向人体正前方抬臂并停稳。</p><button id="directionForwardStart" class="primary">采样前举姿态</button></div>
+            <div class="pose-step apply-step"><span>03</span><strong>应用结果</strong><p>检查候选方向，再应用到当前设备。</p><button id="directionApply" class="primary">应用标定结果</button></div>
+            <div class="pose-step"><span>↺</span><strong>重新选择</strong><p>结束本轮，保留已应用结果。</p><button id="directionCancel">结束本轮</button></div>
+          </div>
+        </div>
+        <p id="directionMessage" class="step-status" role="status">选择设备后，先采中立姿态。</p>
+        <div id="directionResults" class="direction-results" aria-live="polite"></div>
+        <div class="simple-init-row"><div><strong>仅中立归零</strong><p id="bodyInitDetails" class="subtle">适用于不标定动作方向的快速初始化。</p></div><div class="buttons"><button id="bodyInitBegin">准备中立归零</button><button id="bodyInitConfirm" class="primary">我已站稳，采集参考</button></div></div>
+      </section>
+
+      <section id="advanced" class="advanced-workspace">
+        <div class="section-heading"><div><span class="kicker">ADVANCED</span><h2>高级设置与详细诊断</h2></div></div>
+        <div class="advanced-grid">
+          <details class="advanced-panel glass"><summary>融合策略与停稳保持</summary><div class="advanced-content">
+            <div class="binding-controls"><label>融合策略<select id="bodyProcessing"></select></label><button id="bodyApplyProcessing">应用并撤销安装参考</button><label class="checkbox"><input id="bodyHold" type="checkbox" checked>校准后停稳保持</label></div><p id="bodyProcessingStatus" class="subtle"></p>
+          </div></details>
+
+          <details class="advanced-panel glass"><summary>实验位移与板卡轨迹</summary><div class="advanced-content">
+            <div class="body-position"><label>位置来源<select id="bodyPositionSource"><option value="off">关闭</option><option value="experimental">实验惯性估算 · 会漂移</option></select></label><button id="bodyPositionApply">应用位置来源</button></div>
+            <p id="bodyPositionStatus" class="subtle">位置来源关闭。</p>
+            <div class="angles position-angles"><div><span>X / m</span><strong id="poseX">—</strong></div><div><span>Y / m</span><strong id="poseY">—</strong></div><div><span>Z / m</span><strong id="poseZ">—</strong></div></div>
+            <canvas id="poseCanvas" aria-label="三维位置姿态与运动轨迹"></canvas>
+            <div class="view-tools"><label>缩放<input id="poseZoom" type="range" min="0.5" max="2" step="0.05" value="1"></label><label>视野 / m<input id="sceneRange" type="number" min="0.1" max="20" step="0.1" value="1"></label><label class="checkbox"><input id="showTrail" type="checkbox" checked>轨迹</label><label class="checkbox"><input id="followPose" type="checkbox">跟随</label><button id="clearTrail">清除轨迹</button><button id="viewReset">重置视角</button></div>
+            <p id="poseQuality" class="subtle">位置为惯性估算，不是可靠绝对定位。</p>
+          </div></details>
+
+          <details class="advanced-panel glass"><summary>实验位置跟踪</summary><div class="advanced-content motion-panel">
+            <div class="section-heading"><h3>位姿跟踪与漂移抑制</h3><span id="motionPhase" class="badge">未开始</span></div>
+            <div class="buttons"><label>跟踪方式<select id="motionDuration"><option value="0">连续跟踪</option><option value="10">10 秒片段</option><option value="30">30 秒片段</option></select></label><label>漂移抑制<select id="driftMode"><option value="faithful">运动优先</option><option value="balanced" selected>均衡</option><option value="stable">稳定优先</option></select></label><button id="startMotion" class="primary">继续跟踪</button><button id="stopMotion">暂停</button><button id="resetMotion">归零</button></div>
+            <label class="checkbox"><input id="motionZupt" type="checkbox" checked>停稳自动锁定位置并归零速度</label><p id="motionMessage" class="subtle" role="status"></p><p id="restDiagnostics" class="subtle"></p>
+            <div class="metrics"><div>位置 X / m<strong id="dx">—</strong></div><div>位置 Y / m<strong id="dy">—</strong></div><div>位置 Z / m<strong id="dz">—</strong></div><div>距原点 / m<strong id="distance">—</strong></div><div>速度 / m/s<strong id="speed">—</strong></div><div>时长 / s<strong id="motionElapsed">0</strong></div></div><p id="linearAccel" class="subtle"></p>
+          </div></details>
+
+          <details class="advanced-panel glass"><summary>坐标轴设置（更改后需重标定）</summary><div class="advanced-content coordinates-panel">
+            <div class="section-heading"><h3>坐标轴与方向</h3><span id="coordinateSummary" class="badge">默认右手系</span></div>
+            <div class="axis-controls"><label>输出 X<select id="mapX"><option>+X</option><option>-X</option><option>+Y</option><option>-Y</option><option>+Z</option><option>-Z</option></select></label><label>输出 Y<select id="mapY"><option>+X</option><option>-X</option><option selected>+Y</option><option>-Y</option><option>+Z</option><option>-Z</option></select></label><label>输出 Z<select id="mapZ"><option>+X</option><option>-X</option><option>+Y</option><option>-Y</option><option selected>+Z</option><option>-Z</option></select></label></div>
+            <div class="axis-controls"><label>位移 X<select id="signX"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label><label>位移 Y<select id="signY"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label><label>位移 Z<select id="signZ"><option value="1">正向 +</option><option value="-1">反向 −</option></select></label></div>
+            <div class="buttons"><button id="applyCoordinates" class="primary">应用设置</button><button id="defaultCoordinates">恢复默认</button></div>
+          </div></details>
+
+          <details class="advanced-panel glass diagnostic-panel"><summary>原始传感器与分层诊断</summary><div class="advanced-content">
+            <table class="values"><thead><tr><th>传感器</th><th>X</th><th>Y</th><th>Z</th></tr></thead><tbody><tr><th>加速度 / g</th><td id="ax">—</td><td id="ay">—</td><td id="az">—</td></tr><tr><th>角速度 / °/s</th><td id="gx">—</td><td id="gy">—</td><td id="gz">—</td></tr><tr><th>磁场 / mG</th><td id="mx">—</td><td id="my">—</td><td id="mz">—</td></tr></tbody></table>
+            <pre id="bodyDiagnosticLayers">等待选择设备</pre><pre id="directionDetails">尚无方向标定记录</pre>
+          </div></details>
+        </div>
+      </section>
+
+      <section id="playback" class="glass playback" hidden><strong id="playTitle">记录回放</strong><div class="buttons"><button id="play">播放</button><input id="seek" type="range" min="0" value="0"><span id="playTime">0 / 0 s</span><button id="exitReplay">返回实时</button></div><p id="playSummary" class="subtle"></p></section>
+      <div class="legacy-proxy" aria-hidden="true"><button id="record">开始记录</button><button id="records">记录与回放</button><p id="recordStatus"></p></div>
+    </main>
+    <footer>十四槽位惯性动作捕捉开发台 · 兼容原单节点开发台 · 近似软件对齐 · 实验位移不代表可靠绝对定位</footer>
+  </div>
+</div>
+
+<dialog id="recordDialog"><div class="section-heading"><h2>历史记录与回放</h2><button id="closeDialog">关闭</button></div><div class="buttons"><select id="sessions" aria-label="记录会话"></select><button id="preview">预览</button><button id="loadReplay">加载回放</button><button id="download">导出 ZIP</button></div><p id="sessionInfo" class="subtle"></p><div class="tableScroll"><table id="previewTable"></table></div></dialog>
+<script src="/static/pose_math.js" defer></script><script src="/static/body_view.js" defer></script><script src="/static/app.js" defer></script><script src="/static/direction_app.js" defer></script><script src="/static/body_app.js" defer></script>
+</body>
+</html>

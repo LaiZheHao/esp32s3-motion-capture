@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const histories = {accel: [], gyro: [], mag: []};
-const colors = ["#e66354", "#279975", "#397fd7"];
+const colors = ["#ff6573", "#49e39e", "#617cff"];
 let socket, latest = null, orientation = [1,0,0,0], lastFrame = null, online = false;
 let replay = null, replayIndex = 0, playing = false, playStart = 0, playOffset = 0;
 let catalogItems = [], activeSession = null;
@@ -32,26 +32,26 @@ function drawPose() {
   const project=v=>PoseMath.project(v,viewYaw,viewElevation,[width/2,height*.57],scale,center);
   function line(a,b,color){ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(...a.slice(0,2));ctx.lineTo(...b.slice(0,2));ctx.stroke();}
   const spacing=range<=.5?.05:range<=2?.1:range<=5?.5:1,span=Math.ceil(range*1.5/spacing)*spacing;
-  ctx.lineWidth=1;for(let i=-span;i<=span+spacing*.1;i+=spacing){line(project([i,-span,0]),project([i,span,0]),"#dee8ef");line(project([-span,i,0]),project([span,i,0]),"#dee8ef");}
+  ctx.lineWidth=1;for(let i=-span;i<=span+spacing*.1;i+=spacing){line(project([i,-span,0]),project([i,span,0]),"rgba(111,126,187,.13)");line(project([-span,i,0]),project([span,i,0]),"rgba(111,126,187,.13)");}
   const worldOrigin=project([0,0,0]);ctx.lineWidth=2;
   [[range*.65,0,0],[0,range*.65,0],[0,0,range*.65]].forEach((v,i)=>{const tip=project(v);line(worldOrigin,tip,colors[i]);ctx.fillStyle=colors[i];ctx.font="bold 13px system-ui";ctx.fillText("XYZ"[i],tip[0]+5,tip[1]);});
-  ctx.fillStyle="#163044";ctx.beginPath();ctx.arc(worldOrigin[0],worldOrigin[1],3,0,Math.PI*2);ctx.fill();ctx.fillText("O",worldOrigin[0]+5,worldOrigin[1]+14);
+  ctx.fillStyle="#dfe4ff";ctx.beginPath();ctx.arc(worldOrigin[0],worldOrigin[1],3,0,Math.PI*2);ctx.fill();ctx.fillText("O",worldOrigin[0]+5,worldOrigin[1]+14);
   if($("showTrail").checked&&poseTrail.length>1){ctx.lineWidth=2;ctx.strokeStyle="#e7a039";ctx.beginPath();poseTrail.forEach((p,i)=>{const v=project(p);i?ctx.lineTo(v[0],v[1]):ctx.moveTo(v[0],v[1]);});ctx.stroke();}
   const vertices=[[-.24,-.16,-.035],[.24,-.16,-.035],[.24,.16,-.035],[-.24,.16,-.035],[-.24,-.16,.035],[.24,-.16,.035],[.24,.16,.035],[-.24,.16,.035]].map(v=>project(PoseMath.worldVertex(v,orientation,scenePosition,sceneSigns)));
   const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]].map((ids,i)=>({ids,i,depth:ids.reduce((s,j)=>s+vertices[j][2],0)/4})).sort((a,b)=>a.depth-b.depth);
-  for(const face of faces){ctx.beginPath();face.ids.forEach((j,i)=>i?ctx.lineTo(...vertices[j].slice(0,2)):ctx.moveTo(...vertices[j].slice(0,2)));ctx.closePath();ctx.fillStyle=face.i===1?"#69b5d4":"#bfdce9";ctx.fill();ctx.strokeStyle="#397389";ctx.stroke();}
+  for(const face of faces){ctx.beginPath();face.ids.forEach((j,i)=>i?ctx.lineTo(...vertices[j].slice(0,2)):ctx.moveTo(...vertices[j].slice(0,2)));ctx.closePath();ctx.fillStyle=face.i===1?"rgba(104,120,255,.55)":"rgba(91,108,255,.28)";ctx.fill();ctx.strokeStyle="#7e8bff";ctx.stroke();}
   const origin=project(scenePosition);ctx.lineWidth=3;
   [[.32,0,0],[0,.32,0],[0,0,.32]].forEach((v,i)=>{const tip=project(PoseMath.worldVertex(v,orientation,scenePosition,sceneSigns));line(origin,tip,colors[i]);ctx.fillStyle=colors[i];ctx.font="bold 12px system-ui";ctx.fillText("b"+"XYZ"[i],tip[0]+5,tip[1]);});
-  ctx.font="12px system-ui";ctx.fillStyle="#617482";ctx.fillText(replay?"位姿与轨迹回放":(online?"实时位姿 · 位置为惯性估算":"等待真实数据"),14,24);ctx.fillText(`网格 ${spacing.toFixed(2)} m · 轨迹 ${poseTrail.length} 点`,14,43);
+  ctx.font="12px system-ui";ctx.fillStyle="#9ba6c2";ctx.fillText(replay?"位姿与轨迹回放":(online?"实时位姿 · 位置为惯性估算":"等待真实数据"),14,24);ctx.fillText(`网格 ${spacing.toFixed(2)} m · 轨迹 ${poseTrail.length} 点`,14,43);
 }
 function drawChart(canvas, samples) {
   if(canvas.getClientRects?.().length===0)return;
   const {ctx,width,height}=canvasSize(canvas);ctx.clearRect(0,0,width,height);
   let min=Infinity,max=-Infinity;for(const sample of samples)for(const v of sample){min=Math.min(min,v);max=Math.max(max,v);}
   if(!samples.length){min=-1;max=1;}if(max-min<.01){min-=.5;max+=.5;}const pad=(max-min)*.1;min-=pad;max+=pad;
-  ctx.font="11px system-ui";ctx.fillStyle="#617482";ctx.fillText(format(max,1),0,12);ctx.fillText(format(min,1),0,height-5);
-  ctx.lineWidth=1;ctx.strokeStyle="#e4ebef";for(let j=0;j<4;j++){const y=8+j*(height-16)/3;ctx.beginPath();ctx.moveTo(48,y);ctx.lineTo(width,y);ctx.stroke();}
-  for(let axis=0;axis<3;axis++){ctx.strokeStyle=colors[axis];ctx.lineWidth=1.5;ctx.beginPath();samples.forEach((v,i)=>{const x=48+i*(width-50)/Math.max(1,samples.length-1),y=height-8-(v[axis]-min)/(max-min)*(height-16);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();}
+  ctx.font="11px system-ui";ctx.fillStyle="#7f89a6";ctx.fillText(format(max,1),0,12);ctx.fillText(format(min,1),0,height-5);
+  ctx.lineWidth=1;ctx.strokeStyle="rgba(122,135,184,.14)";for(let j=0;j<4;j++){const y=8+j*(height-16)/3;ctx.beginPath();ctx.moveTo(48,y);ctx.lineTo(width,y);ctx.stroke();}
+  for(let axis=0;axis<3;axis++){ctx.strokeStyle=colors[axis];ctx.shadowColor=colors[axis];ctx.shadowBlur=4;ctx.lineWidth=1.5;ctx.beginPath();samples.forEach((v,i)=>{const x=48+i*(width-50)/Math.max(1,samples.length-1),y=height-8-(v[axis]-min)/(max-min)*(height-16);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.shadowBlur=0;}
 }
 function addHistory(node){for(const key of Object.keys(histories)){histories[key].push(node[key]);if(histories[key].length>400)histories[key].shift();}}
 function clearHistory(){for(const key of Object.keys(histories))histories[key].length=0;lastFrame=null;}
