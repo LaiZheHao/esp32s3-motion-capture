@@ -13,9 +13,9 @@ const viewports=[
   {name:"direction-v2-1366x768.png",route:"calibration",step:3,width:1366,height:768},
   {name:"records-v2-1920x1080.png",route:"records",width:1920,height:1080},
   {name:"replay-v2-1920x1080.png",route:"replay",width:1920,height:1080},
-  {name:"mannequin-v3-front.png",route:"calibration",modelOnly:true,width:1920,height:1080},
-  {name:"mannequin-v3-oblique.png",route:"calibration",modelOnly:true,drag:90,width:1920,height:1080},
-];
+  {name:"mannequin-v4-front.png",route:"calibration",modelOnly:true,width:1920,height:1080},
+  {name:"mannequin-v4-oblique.png",route:"calibration",modelOnly:true,drag:90,width:1920,height:1080},
+].filter(item=>!process.argv[5]||item.name.includes(process.argv[5]));
 
 const target=await fetch(`${endpoint}/json/new?${encodeURIComponent(pageUrl)}`,{method:"PUT"}).then(response=>{
   if(!response.ok)throw new Error(`无法创建浏览器页面：${response.status}`);

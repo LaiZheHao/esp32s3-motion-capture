@@ -70,9 +70,11 @@
         // The links between joint anchors are virtual geometry, not additional
         // sampled segments. Connect to the nearest point on the parent bone.
         const parent=bySegment[segment.parent];
-        if(selected||segment.measured)line(a,b,selected?"#9b72ff":color,selected?4:2,segment.measured?[]:[5,4]);
-        const node=[(a[0]+b[0])/2,(a[1]+b[1])/2];ctx.save();ctx.fillStyle=selected?"#9b72ff":color;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=selected?20:12;for(const point of [node]){ctx.beginPath();ctx.arc(point[0],point[1],selected?7:5,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(225,230,255,.8)";ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();
-        const center=[(a[0]+b[0])/2,(a[1]+b[1])/2];ctx.save();ctx.fillStyle="rgba(8,12,29,.88)";ctx.strokeStyle="rgba(143,157,255,.72)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(center[0]+10,center[1],8,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="9px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),center[0]+10,center[1]);ctx.restore();
+        if(selected)line(a,b,"rgba(155,114,255,.5)",2,segment.measured?[]:[5,4]);
+        const node=[(a[0]+b[0])/2,(a[1]+b[1])/2],radius=selected?8:segment.measured?7:5;
+        ctx.save();ctx.shadowColor=selected?"#9873ff":color;ctx.shadowBlur=selected?22:segment.measured?15:4;ctx.fillStyle=selected?"#9b72ff":color;ctx.beginPath();ctx.arc(node[0],node[1],radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(210,220,255,.85)";ctx.lineWidth=1.5;ctx.stroke();
+        if(segment.measured||selected){ctx.shadowBlur=0;ctx.fillStyle="#f1f4ff";ctx.beginPath();ctx.arc(node[0],node[1],radius*.42,0,Math.PI*2);ctx.fill();}ctx.restore();
+        const labelX=node[0]+(node[0]<box.width/2-8?-29:14);ctx.save();ctx.fillStyle="rgba(7,10,21,.88)";ctx.strokeStyle="rgba(163,177,217,.5)";ctx.lineWidth=.8;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(labelX,node[1]-9,19,18,4);else ctx.rect(labelX,node[1]-9,19,18);ctx.fill();ctx.stroke();ctx.fillStyle="#eef1ff";ctx.font="11px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(segmentIndex),labelX+9.5,node[1]);ctx.restore();
         this.hits.push({slot,device_id:segment.device_id,a,b});
         if(selected){[[.1,0,0],[0,.1,0],[0,0,.1]].forEach((axis,i)=>{const delta=rotate(axis,segment.world_quaternion||[1,0,0,0]);line(a,project(translatePoint(start.map((v,j)=>v+delta[j]),rootOffset)),["#e66354","#279975","#397fd7"][i],2);});}
       }

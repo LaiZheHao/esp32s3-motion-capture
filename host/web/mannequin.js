@@ -22,6 +22,24 @@
       for(let j=0;j<=steps;j++){const t=j/steps,r=interpolate(profile,t),center=add(a,mul(sub(b,a),t));rings.push(Array.from({length:sides},(_,i)=>{const angle=i/sides*2*Math.PI;return add(center,add(mul(u,r*Math.cos(angle)),mul(v,r*depth*Math.sin(angle))));}));}
       surface(rings,sides);
     }
+    function ellipsoid(center,radii,q=[1,0,0,0]){
+      const rings=[],sides=24;
+      for(let j=0;j<=16;j++){const phi=-Math.PI/2+j/16*Math.PI,r=Math.max(.002,Math.cos(phi));rings.push(Array.from({length:sides},(_,i)=>{const angle=i/sides*2*Math.PI;return add(center,rotate([radii[0]*r*Math.cos(angle),radii[1]*r*Math.sin(angle),radii[2]*Math.sin(phi)],q));}));}surface(rings,sides);
+    }
+    const joined=new Set();
+    function limb(upper,lower,top,bottom,depth=1){
+      const a=upper.start,b=upper.end,c=lower.end,first=sub(b,a),second=sub(c,b),tangent=unit(add(unit(first),unit(second))),rings=[],sides=24;
+      const direction=unit(first),capU=unit(cross(direction,Math.abs(direction[0])<.8?[1,0,0]:[0,1,0])),capV=unit(cross(direction,capU));
+      for(let j=0;j<5;j++){const angle=j/5*Math.PI/2,center=add(a,mul(direction,-top[0]*Math.cos(angle))),radius=Math.max(.001,top[0]*Math.sin(angle));rings.push(Array.from({length:sides},(_,i)=>add(center,add(mul(capU,radius*Math.cos(i/sides*2*Math.PI)),mul(capV,radius*depth*Math.sin(i/sides*2*Math.PI))))));}
+      for(let k=0;k<=32;k++){
+        const part=k<=16?0:1,t=part?(k-16)/16:k/16,start=part?b:a,end=part?c:b,length=Math.hypot(...sub(end,start)),m0=mul(part?tangent:unit(first),length),m1=mul(part?unit(second):tangent,length),t2=t*t,t3=t2*t;
+        const center=start.map((v,i)=>(2*t3-3*t2+1)*v+(t3-2*t2+t)*m0[i]+(-2*t3+3*t2)*end[i]+(t3-t2)*m1[i]);
+        const derivative=unit(start.map((v,i)=>(6*t2-6*t)*v+(3*t2-4*t+1)*m0[i]+(-6*t2+6*t)*end[i]+(3*t2-2*t)*m1[i]));
+        const u=unit(cross(derivative,Math.abs(derivative[0])<.8?[1,0,0]:[0,1,0])),v=unit(cross(derivative,u)),radius=interpolate(part?bottom:top,t);
+        rings.push(Array.from({length:sides},(_,i)=>add(center,add(mul(u,radius*Math.cos(i/sides*2*Math.PI)),mul(v,radius*depth*Math.sin(i/sides*2*Math.PI))))));
+      }
+      surface(rings,sides);joined.add(upper.id||upper.slot);joined.add(lower.id||lower.slot);
+    }
     const pelvis=map.pelvis;
     if(pelvis){
       const base=pelvis.start,q=pelvis.world_quaternion||[1,0,0,0],rows=[[-.075,.038,.05],[-.045,.115,.087],[.015,.16,.105],[.085,.158,.105],[.16,.132,.09],[.24,.145,.105],[.33,.18,.115],[.41,.205,.105],[.455,.21,.085],[.49,.155,.068],[.525,.056,.052]],rings=[];
@@ -30,12 +48,18 @@
       const row=rows.at(-1);rings.push(Array.from({length:28},(_,i)=>add(base,rotate([row[2]*Math.cos(i/28*Math.PI*2),row[1]*Math.sin(i/28*Math.PI*2),row[0]],q))));surface(rings,28);
       const neck=map.head?.start||add(base,rotate([0,0,.55],q));tube(add(base,rotate([0,0,.49],q)),add(neck,rotate([0,0,.07],q)),[.053,.048,.046],.9);
     }
+    for(const side of ["left","right"]){
+      const arm=map[side+"_upper_arm"],forearm=map[side+"_forearm"],thigh=map[side+"_thigh"],shank=map[side+"_shank"];
+      if(arm&&forearm)limb(arm,forearm,[.047,.054,.050,.042,.033],[.033,.039,.036,.027,.021],1.03);
+      if(thigh&&shank)limb(thigh,shank,[.075,.086,.078,.059,.043],[.043,.054,.055,.037,.025],1.1);
+    }
     for(const segment of segments){
-      const id=segment.id||segment.slot,a=segment.start,b=segment.end;if(!a||!b||id==="pelvis")continue;
+      const id=segment.id||segment.slot,a=segment.start,b=segment.end;if(!a||!b||id==="pelvis"||joined.has(id))continue;
       if(id==="head"){
         const q=segment.world_quaternion||[1,0,0,0],length=Math.hypot(...sub(b,a)),center=add(a,mul(sub(b,a),.54)),rings=[],sides=28;
         for(let j=0;j<=22;j++){const phi=-Math.PI/2+j/22*Math.PI,ring=Math.max(.003,Math.cos(phi)),jaw=phi<-.15?.79+.21*(phi+Math.PI/2)/(Math.PI/2-.15):1;
           rings.push(Array.from({length:sides},(_,i)=>{const theta=i/sides*2*Math.PI;let x=.084*ring*Math.cos(theta),y=.077*ring*Math.sin(theta)*jaw,z=length*.54*Math.sin(phi);const nose=Math.max(0,Math.cos(theta))**18*Math.exp(-(((phi+.07)/.22)**2))*.018;x+=nose;return add(center,rotate([x,y,z],q));}));}surface(rings,sides);
+        for(const side of [-1,1])ellipsoid(add(center,rotate([-.008,side*.077,-.006],q)),[.012,.014,.027],q);
       }else if(id.includes("upper_arm"))tube(a,b,[.025,.052,.052,.045,.036,.032],1.05);
       else if(id.includes("forearm"))tube(a,b,[.031,.039,.037,.029,.022,.021],.95);
       else if(id.includes("thigh"))tube(a,b,[.072,.086,.079,.068,.052,.044],1.12);
@@ -46,7 +70,8 @@
         for(let finger=0;finger<4;finger++){const spread=(finger-1.5)*.016,start=add(add(a,mul(delta,.53)),mul(side,spread)),end=add(add(a,mul(delta,.95-Math.abs(finger-1.3)*.09)),mul(side,spread*1.22));tube(start,end,[.008,.008,.006,.002],.8,10,6);}
         tube(add(a,mul(delta,.21)),add(add(a,mul(delta,.65)),mul(side,.047)),[.012,.011,.006,.002],.8,12,6);
       }else if(id.includes("foot")){
-        const delta=sub(b,a),q=segment.world_quaternion,down=rotate([0,0,-.04],q),toe=add(add(a,mul(delta,.82)),down);tube(add(a,mul(down,.15)),toe,[.026,.041,.047,.043,.024,.005],.65,20,12);
+        const delta=sub(b,a),q=segment.world_quaternion,down=rotate([0,0,-.055],q),toe=add(add(a,mul(delta,.86)),down);tube(add(a,mul(down,.25)),toe,[.025,.035,.031,.026,.023,.006],1.65,24,16);
+        const side=rotate([0,1,0],q);for(let i=0;i<5;i++){const offset=mul(side,(i-2)*.016),start=add(add(a,mul(delta,.70)),add(down,offset)),end=add(add(a,mul(delta,.97-i*.022)),add(down,offset));tube(start,end,[.011-i*.001,.012-i*.001,.007,.002],.8,10,6);}
       }
     }
     return faces;
