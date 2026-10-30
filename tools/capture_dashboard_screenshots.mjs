@@ -13,6 +13,8 @@ const viewports=[
   {name:"direction-v2-1366x768.png",route:"calibration",step:3,width:1366,height:768},
   {name:"records-v2-1920x1080.png",route:"records",width:1920,height:1080},
   {name:"replay-v2-1920x1080.png",route:"replay",width:1920,height:1080},
+  {name:"mannequin-v3-front.png",route:"calibration",modelOnly:true,width:1920,height:1080},
+  {name:"mannequin-v3-oblique.png",route:"calibration",modelOnly:true,drag:90,width:1920,height:1080},
 ];
 
 const target=await fetch(`${endpoint}/json/new?${encodeURIComponent(pageUrl)}`,{method:"PUT"}).then(response=>{
@@ -65,9 +67,13 @@ for(const viewport of viewports) {
   if(metrics.scrollWidth>metrics.innerWidth||metrics.bodyWidth>metrics.innerWidth) {
     throw new Error(`${viewport.width}x${viewport.height} 出现横向溢出：${JSON.stringify(metrics)}`);
   }
-  const shot=await command("Page.captureScreenshot",{format:"png",fromSurface:true,captureBeyondViewport:false});
+  let clip;
+  if(viewport.modelOnly){const rect=await command("Runtime.evaluate",{expression:"(()=>{const r=document.querySelector('.hero-panel').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1}})()",returnByValue:true});clip=rect.result.value;}
+  if(viewport.drag){const x=clip.x+clip.width/2,y=clip.y+clip.height/2;await command("Input.dispatchMouseEvent",{type:"mousePressed",x,y,button:"left",clickCount:1});await command("Input.dispatchMouseEvent",{type:"mouseMoved",x:x+viewport.drag,y,button:"left",buttons:1});await command("Input.dispatchMouseEvent",{type:"mouseReleased",x:x+viewport.drag,y,button:"left",clickCount:1});await command("Runtime.evaluate",{expression:"new Promise(r=>setTimeout(r,300))",awaitPromise:true});}
+  const shot=await command("Page.captureScreenshot",{format:"png",fromSurface:true,captureBeyondViewport:false,...(clip?{clip}:{})});
   const targetPath=path.join(output,viewport.name);
   await fs.writeFile(targetPath,Buffer.from(shot.data,"base64"));
   process.stdout.write(`${viewport.name} ${JSON.stringify(metrics)}\n`);
 }
 socket.close();
+await fetch(`${endpoint}/json/close/${target.id}`);
