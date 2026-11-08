@@ -12,7 +12,10 @@ try {
     }
     $dependencyProbe = @'
 try:
+    import sys
     import fastapi, uvicorn, serial
+    if sys.platform == "win32":
+        import pythoncom
 except Exception:
     raise SystemExit(1)
 '@

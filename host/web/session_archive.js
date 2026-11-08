@@ -21,6 +21,5 @@
     }
     throw new Error("记录缺少 "+filename);
   }
-  function toCsv(rows){const quote=value=>'"'+String(value??"").replaceAll('"','""')+'"';return '\ufeff'+["time_s,device_id,source,data_json",...rows.map(row=>[row.time_s,row.data?.device_id,row.data?.source,JSON.stringify(row.data)].map(quote).join(","))].join("\r\n");}
-  root.SessionArchive={extract,toCsv};if(typeof module!=="undefined")module.exports=root.SessionArchive;
+  root.SessionArchive={extract};if(typeof module!=="undefined")module.exports=root.SessionArchive;
 })(globalThis);

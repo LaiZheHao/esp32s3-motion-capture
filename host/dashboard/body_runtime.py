@@ -21,6 +21,7 @@ from .protocol import CurrentCsvProtocol, FrameError
 from .serial_transport import SerialTransport
 from .tcp_transport import TcpTransport
 from . import magnetometer
+from . import session_library
 
 
 class BodyRuntime:
@@ -83,7 +84,9 @@ class BodyRuntime:
         self._last_state = state
         if self.recorder.error:
             self.message = self.recorder.error
-            await asyncio.to_thread(self.recorder.stop)
+            async with self._lock:
+                if self.recorder.error and self.recorder.busy:
+                    await asyncio.to_thread(self.recorder.stop)
         if self.clients:
             payload = json.dumps(state, ensure_ascii=False, allow_nan=False)
             async def send(client):
@@ -291,6 +294,29 @@ class BodyRuntime:
             raise ValueError("回放中不可修改实时绑定、参考或校准；先返回实时")
         if self.recorder.active:
             raise ValueError("记录中禁止改绑定、参考、校准和输入模式，请先停止并保存")
+
+    def session_busy_reason(self, session):
+        if self.recorder.session == session and self.recorder.busy:
+            return "请先停止录制并等待保存完成"
+        if self.replay.session == session:
+            return "请先退出该会话的回放"
+        return None
+
+    async def recycle_session(self, session):
+        async with self._lock:
+            if reason := self.session_busy_reason(session):
+                raise session_library.SessionConflict(reason)
+            await asyncio.to_thread(session_library.recycle, self.recorder.root, session)
+
+    async def restore_session(self, trash_id):
+        async with self._lock:
+            return await asyncio.to_thread(session_library.restore, self.recorder.root, trash_id)
+
+    async def protect_session(self, session, protected):
+        async with self._lock:
+            if reason := self.session_busy_reason(session):
+                raise session_library.SessionConflict(reason)
+            await asyncio.to_thread(session_library.set_calibration, self.recorder.root, session, protected)
 
     async def command(self, data):
         async with self._lock:

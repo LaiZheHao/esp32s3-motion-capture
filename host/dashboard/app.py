@@ -5,16 +5,18 @@ import os
 from contextlib import asynccontextmanager
 from serial.tools import list_ports
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketState
+from pydantic import StrictBool
 
 from .service import Runtime
 from .body_runtime import BodyRuntime
 from .body_config import load_config
 from .body_engine import BodyEngine
-from . import body_recording
+from . import body_recording, session_library
+from .segment_displacement import MOTION_CSV_NAME
 from .recordings import RecordingNotFound, catalog, preview_csv, safe_item, session_zip, replay_data
 
 
@@ -48,7 +50,54 @@ async def body_status():
 
 @app.get("/api/body/recordings")
 async def body_sessions():
-    return {"items": await asyncio.to_thread(body_recording.catalog, body_runtime.recorder.root)}
+    items = await asyncio.to_thread(session_library.history, body_runtime.recorder.root)
+    for item in items:
+        item["busy_reason"] = body_runtime.session_busy_reason(item["id"])
+    return {"items": items, "limit": body_recording.HISTORY_LIMIT}
+
+
+async def _session_operation(operation, *args):
+    try:
+        return await operation(*args)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except session_library.SessionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.delete("/api/body/recordings/{session}", status_code=204)
+async def recycle_body_session(session: str):
+    await _session_operation(body_runtime.recycle_session, session)
+
+
+@app.put("/api/body/recordings/{session}/calibration", status_code=204)
+async def protect_body_session(session: str, protected: StrictBool = Body(embed=True)):
+    await _session_operation(body_runtime.protect_session, session, protected)
+
+
+@app.get("/api/body/trash")
+async def body_trash():
+    items = await _session_operation(asyncio.to_thread, session_library.trash_catalog, body_runtime.recorder.root)
+    return {"items": items, "limit": session_library.TRASH_LIMIT}
+
+
+@app.put("/api/body/trash/{trash_id}/restore")
+async def restore_body_session(trash_id: str):
+    return {"session": await _session_operation(body_runtime.restore_session, trash_id)}
+
+
+@app.get("/api/body/recordings/{session}/motion-csv")
+async def body_motion_csv(session: str):
+    try:
+        folder = body_recording.session_path(body_runtime.recorder.root, session)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    result = (folder / MOTION_CSV_NAME).resolve()
+    if result.parent != folder or not result.is_file():
+        raise HTTPException(status_code=404, detail="该会话尚无单节点运动结果，请先运行 tools/measure_displacement.py")
+    return FileResponse(result, media_type="text/csv", filename=f"{session}-{MOTION_CSV_NAME}")
 
 
 @app.get("/api/body/recordings/{session}/download")

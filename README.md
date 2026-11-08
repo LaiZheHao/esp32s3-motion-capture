@@ -21,6 +21,7 @@
 | 十四槽位骨架 | 同一开发台的身份/处理/初始化/骨架/诊断/记录回放已做离线验证；不是十四板硬件验收 |
 | 三节点实验     | 已有预设、离线演示和采集分析程序；第三节点尚未完成实板联合验证       |
 | 数据与可视化优化  | 已整合伙伴重力向量校正、静置校准重试与质量门控；实板漂移、动态精度仍待验证 |
+| 单板短时三维位移 | 六面标定、整段回算和整秒 CSV 已通过离线验证。下一次实测从[六面静置标定](#下次实板位移测量从哪里开始)开始，50 cm 平移的 1 cm 误差门槛待验收 |
 
 当前主线为 **USB → Wi-Fi → 多板**。BLE、ESP-NOW 和旧版全身系统没有纳入当前工程；历史源码可以从 Git 历史找回。
 
@@ -135,6 +136,21 @@ node tests/test_body_view.js
 ```
 
 实验报告的 JavaScript 测试需要先生成四份演示报告，完整命令见 [GitHub CI](.github/workflows/ci.yml)。
+
+## 下次实板位移测量从哪里开始
+
+**从六面静置标定开始。** 这是单板位移流程新增的加速度计标定步骤，用来估计三个轴的零偏和比例。此前已用一块板通过 USB 收到带帧序号和设备时间戳的 IMU3 数据，位移解算和导出已做离线验证。
+
+1. **连接一块板。** 用 `.\tools\start_dashboard.ps1` 启动或重启 8000 开发台，选择板卡当前的 USB 串口，确认有有效采样。位移解算在电脑端运行，现有能正常输出 IMU3 的固件即可使用。
+2. **录六个标定会话。** 分别使 ICM-42688-P 的原始 `+X、-X、+Y、-Y、+Z、-Z` 朝上。每一面先放稳，再单独录制约 2 秒，保存后记下历史记录页上的会话 ID。六个会话和动作记录使用同一块板及相同的采样配置。
+3. **录第一次已知距离平移。** 保持原始 `+Z` 朝上，将板卡 `+X` 对准实验台 `+X`。开始录制后静置至少 1 秒，沿 `+X` 平移 **50 cm**，停稳后再静置至少 1 秒，然后保存。尺量的 50 cm 只用于验收。
+4. **解算并检查摘要。** 在仓库根目录运行下方命令，将 `MOTION` 和六个面对应的占位目录替换为实际会话 ID。若静置窗与默认的首尾各 1 秒不同，按实际录制设置 `--start-still` 和 `--end-still`。
+
+```powershell
+host/.venv/Scripts/python.exe -B -X utf8 tools/measure_displacement.py "host/recordings/MOTION" --faces "host/recordings/XP" "host/recordings/XN" "host/recordings/YP" "host/recordings/YN" "host/recordings/ZP" "host/recordings/ZN" --reference 0.50 0 0
+```
+
+动作目录中的 `single_node_motion.csv` 保存整秒结果，`single_node_motion_summary.json` 保存实际终点。在摘要里看 `validation.endpoint_error_m` 和 `validation.within_target`。首轮目标为 **三维终点误差 ≤ 0.01 m（2%）**，串轴误差也计入。重复测量并记录误差，再做 Y、Z 和斜向移动。静置窗和导出细节见[单板短时位移测量](docs/usage.md#单板短时位移测量)。
 
 ## 接下来按什么顺序做
 

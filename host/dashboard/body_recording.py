@@ -18,6 +18,7 @@ from uuid import uuid4
 SCHEMA = "imu-body-session/1"
 FILES = ("metadata.json", "samples.jsonl", "body_frames.jsonl", "events.jsonl", "frame_index.jsonl")
 DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "recordings"
+HISTORY_LIMIT = 30
 
 
 def session_path(root, name):
@@ -38,11 +39,12 @@ def catalog(root=DEFAULT_ROOT):
             continue
         try:
             data = json.loads((folder / "metadata.json").read_text(encoding="utf-8"))
-            if data.get("schema_version") == SCHEMA:
+            if isinstance(data, dict) and data.get("schema_version") == SCHEMA:
                 items.append({"id": folder.name, "session": folder.name,
                               "status": data["status"], "duration_s": data.get("duration_s", 0),
                               "counts": data.get("counts", {}), "started_unix": data["started_unix"],
-                              "source_types": data.get("source_types", [])})
+                              "source_types": data.get("source_types", []),
+                              "calibration_protected": data.get("calibration_protected")})
         except (OSError, ValueError, KeyError):
             continue
     return sorted(items, key=lambda i: i["started_unix"], reverse=True)
@@ -61,6 +63,8 @@ class BodyRecorder:
     def start(self, snapshot):
         if self.active or self._thread is not None:
             raise ValueError("已有记录尚未停止保存")
+        if len(catalog(self.root)) >= HISTORY_LIMIT:
+            raise ValueError(f"历史记录已达 {HISTORY_LIMIT} 条，请先将旧会话移入回收站")
         self.root.mkdir(parents=True, exist_ok=True)
         self.session = datetime.now().strftime("%Y%m%d-%H%M%S-body-") + uuid4().hex[:8]
         self.folder = self.root / self.session
@@ -166,7 +170,6 @@ class BodyRecorder:
             except Full:
                 continue
         self._thread.join()
-        self._thread = None
         self.meta.update(status="incomplete" if self.error else "complete",
                          error=self.error, duration_s=monotonic()-self.started)
         self.meta["counts"] = dict(self.counts)
@@ -176,9 +179,16 @@ class BodyRecorder:
         except (OSError, ValueError) as exc:
             self.error = f"记录元数据保存失败，不能视为完整会话：{exc}"
             self.meta.update(status="incomplete",error=self.error)
+        finally:
+            self._thread = None
+
+    @property
+    def busy(self):
+        return self.active or self._thread is not None
 
     def payload(self):
-        return {"active": self.active, "session": self.session, "counts": dict(self.counts), "error": self.error}
+        return {"active": self.active, "saving": self.busy and not self.active, "session": self.session,
+                "counts": dict(self.counts), "error": self.error}
 
 
 class BodyReplay:
