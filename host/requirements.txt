@@ -1,5 +1,6 @@
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 pyserial==3.5
+httpx==0.28.1
 pywin32==311; sys_platform == "win32"
 

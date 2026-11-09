@@ -86,6 +86,8 @@ class BodyEngine:
                 self._event("duplicate_source_isolated", device_id=node.device_id, endpoint_id=endpoint_id,
                             primary_endpoint=node.primary_endpoint)
             return False
+        if not node.connected:
+            node.begin_connection_quality()
         node.connected = True
         if node.source != source:
             node.reset_reference("输入来源类型改变：需重新初始化", reset_fusion=True)
@@ -99,6 +101,7 @@ class BodyEngine:
             raise ValueError("设备尚未在指定端点出现")
         if node.primary_endpoint != endpoint_id:
             node.primary_endpoint = endpoint_id
+            node.begin_connection_quality()
             node.connected = endpoint_id in node.active_endpoints
             node.reset_reference("主来源改变：需重新初始化", reset_fusion=True)
             node.last_sequence = node.last_device_us = node.unwrapped_device_us = None

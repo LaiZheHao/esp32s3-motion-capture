@@ -208,7 +208,7 @@
     $("calibration-summary").textContent=`已初始化 ${devices.filter(d=>d.initialized).length} / ${devices.length} · ${state.direction_calibration?.phase||"等待标定"}`;
     $("single-node-title").textContent=selected?`${selected.device_id} · ${selected.body_slot||"未绑定"}`:"先从物理设备列表选择节点";
     document.querySelectorAll(".body-slot strong").forEach(el=>{el.title=el.textContent;el.textContent=el.textContent.replace(/（.*?）/g,"");});
-    for(const [name,transport] of [["usb","serial"],["wifi","wifi"]]){const endpoints=(state.endpoints||[]).filter(e=>e.transport===transport);$(name+"-status").textContent=endpoints.some(e=>e.connected)?"已连接":endpoints.some(e=>e.status==="connecting")?"连接中…":"未连接";}
+    for(const [name,transport] of [["usb","serial"],["wifi","wifi"]]){const endpoints=(state.endpoints||[]).filter(e=>e.transport===transport);$(name+"-status").textContent=endpoints.some(e=>e.status==="connected"||(e.status==null&&e.connected===true))?"已连接":endpoints.some(e=>e.status==="connecting")?"连接中…":"未连接";}
   }
   async function loadReplaySeries(session){try{const response=await fetch(`/api/body/recordings/${encodeURIComponent(session)}/download`);if(!response.ok)throw new Error("无法读取回放曲线");const text=await root.SessionArchive.extract(await response.arrayBuffer(),"body_frames.jsonl");if(replaySession===session)replayFrames=text.trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));}catch(error){if(replaySession===session)$("replay-source").textContent="姿态可回放；曲线未加载："+error.message;}}
   function start(){

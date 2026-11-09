@@ -37,11 +37,15 @@ jobs:
           node --check web/navigation.js
           node --check web/session_archive.js
           node --check web/mannequin.js
+          node --check web/relative_validation_math.js
+          node --check web/relative_validation.js
       - name: Test pose transformations
         run: |
           node tests/test_pose_math.js
           node tests/test_display_buffer.js
           node tests/test_render_visibility.js
+          node tests/test_connection_quality.js
+          node tests/test_relative_validation.js
       - name: Test body scene and device selection
         run: |
           node tests/test_body_view.js
