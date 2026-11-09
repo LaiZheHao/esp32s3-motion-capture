@@ -72,6 +72,12 @@ class NodeProcessor:
         self.arrivals = deque(maxlen=500)
         self.history = deque(maxlen=int(config["timing"]["buffer_size"]))
         self.raw_history = deque(maxlen=1200)
+        self.begin_connection_quality()
+
+    def begin_connection_quality(self):
+        # Keep lifetime counters. Start after the first accepted sample so a
+        # sequence jump across the disconnected period is diagnostic only.
+        self._connection_start = None
 
     @property
     def initialized(self):
@@ -124,6 +130,7 @@ class NodeProcessor:
         self.last_sequence = self.last_device_us = self.unwrapped_device_us = None
         self.clock_offset_s = None
         self.stability.clear()
+        self.begin_connection_quality()
         self.reset_reference(reason, reset_fusion=True)
 
     def consume(self, sample):
@@ -227,6 +234,12 @@ class NodeProcessor:
         self.last_sequence, self.last_device_us = sample.sequence, sample.device_us
         self.latest_at, self.latest_unix = sample.received_monotonic, sample.received_unix
         self.valid_frames += 1
+        if self._connection_start is None:
+            self._connection_start = {"valid_frames": self.valid_frames-1,
+                                      "missing_frames": self.missing_frames,
+                                      "invalid_frames": self.invalid_frames,
+                                      "first_sequence": sample.sequence,
+                                      "started_unix": sample.received_unix}
         self.arrivals.append(self.latest_at)
         aligned_at = (self.unwrapped_device_us/1e6+self.clock_offset_s
                       if self.unwrapped_device_us is not None else self.latest_at)
@@ -271,7 +284,17 @@ class NodeProcessor:
         rate = (len(recent)-1)/(recent[-1]-recent[0]) if len(recent) > 1 and recent[-1] > recent[0] else 0.
         valid = self.connected and age is not None and age <= self.config["timing"]["stale_s"]
         sample = self.mapped_sample
+        baseline = self._connection_start
+        connection = {"has_samples": baseline is not None,
+                      **{key: getattr(self, key)-baseline[key] if baseline else 0
+                         for key in ("valid_frames", "missing_frames", "invalid_frames")},
+                      "first_sequence": baseline["first_sequence"] if baseline else None,
+                      "started_unix": baseline["started_unix"] if baseline else None}
+        connection["loss_percent"] = (100*connection["missing_frames"] /
+                                      max(1, connection["valid_frames"]+connection["missing_frames"])
+                                      if baseline and self.last_sequence is not None else None)
         quality = {"rate_hz": rate, "age_ms": age*1000 if age is not None else None,
+                   "connection": connection,
                    "valid_frames": self.valid_frames, "invalid_frames": self.invalid_frames,
                    "missing_frames": self.missing_frames, "duplicates": self.duplicates,
                    "duplicate_sources": self.duplicate_sources, "out_of_order": self.out_of_order,

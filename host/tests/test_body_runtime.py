@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from time import monotonic
 import unittest
+from unittest.mock import patch
 
 from dashboard.body_runtime import BodyRuntime
 from dashboard.body_recording import catalog
@@ -79,6 +80,42 @@ class BodyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("quaternion", rows[-1]["data"])
         self.assertEqual(rows[-1]["data"]["body_slot"], "left_hand")
         self.assertFalse(runtime.motions)  # Binding/initialization never starts position integration.
+
+    async def test_single_uninitialized_node_records_and_replays_board_pose(self):
+        runtime=self.runtime
+        now=monotonic()
+        raw=SensorSample((0.,0.,1.),(0.,0.,30.),(300.,0.,80.),25.,0.,
+                         node_id="single-offline-fixture",sequence=0,device_us=0,
+                         received_monotonic=now,boot_id="single-boot",sensor_flags=1,
+                         body_slot="right_forearm",protocol_version="IMU3")
+        runtime.consume(raw,"offline",source="simulation_sensor")
+        await runtime.command({"action":"record_start"})
+        for seq in range(1,21):
+            runtime.consume(replace(raw,sequence=seq,device_us=seq*10000,
+                                    received_monotonic=now+seq*.01),"offline",source="simulation_sensor")
+            if seq in (5,10,20):
+                # Windows may give several rapid ticks the same clock value.
+                # Distinct saved times make seeking a specific frame explicit.
+                with patch("dashboard.body_recording.monotonic",return_value=runtime.recorder.started+seq*.01):
+                    await runtime.tick()
+        await runtime.command({"action":"record_stop"})
+        folder=runtime.recorder.folder
+        samples=[json.loads(line) for line in (folder/"samples.jsonl").read_text(encoding="utf-8").splitlines()]
+        frames=[json.loads(line) for line in (folder/"body_frames.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(samples),20)
+        self.assertEqual(len(frames),3)
+        saved=frames[1]["data"]["devices"][0]
+        self.assertFalse(saved["initialized"])
+        self.assertEqual(len(frames[1]["data"]["devices"]),1)
+        self.assertFalse(any(segment["measured"] for segment in frames[1]["data"]["body_frame"]["segments"]))
+        self.assertNotEqual(frames[0]["data"]["devices"][0]["quaternion"],frames[-1]["data"]["devices"][0]["quaternion"])
+        await runtime.command({"action":"replay_open","session":runtime.recorder.session})
+        await runtime.command({"action":"replay_seek","time_s":frames[1]["time_s"]})
+        self.assertEqual(runtime.payload()["devices"][0]["quaternion"],saved["quaternion"])
+        runtime.consume(replace(raw,sequence=21,device_us=210000,received_monotonic=now+.21),"offline",source="simulation_sensor")
+        self.assertEqual(runtime.payload()["devices"][0]["quaternion"],saved["quaternion"])
+        await runtime.command({"action":"replay_close"})
+        self.assertNotEqual(runtime.payload()["devices"][0]["quaternion"],saved["quaternion"])
 
     async def test_loopback_tcp_old_stream_and_invalid_frames(self):
         runtime = self.runtime

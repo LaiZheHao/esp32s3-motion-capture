@@ -146,6 +146,14 @@ window.setBodyDisplayPose=device=>{orientation=device.quaternion||orientation;};
 try{const saved=JSON.parse(localStorage.getItem("imu-connection"));if(saved){$("transport").value=saved.transport;$("host").value=saved.host;$("tcpPort").value=saved.tcp_port;savedSerialDevice=saved.device||null;}}catch{}
 // The unified body controller owns all connections and model sources. The
 // legacy websocket is retained only for a page without the body workspace.
+function renderBodyLoss(device,quality,replaying) {
+  const connection=quality.connection,sequence=quality.sequence??device?.sequence;
+  $("lossLabel").firstChild.textContent=connection||!device?(replaying?"记录时连接缺帧率":"本次连接缺帧率"):"序号缺帧率（累计）";
+  const missing=quality.missing_frames??0,frames=quality.valid_frames??device?.frames??0;
+  const percent=connection?connection.loss_percent:100*missing/Math.max(1,frames+missing);
+  $("loss").textContent=sequence==null||percent==null?"—":format(percent)+"%";
+  $("loss").title=connection||!device?"从本次连接的第一帧开始统计；累计计数保留在节点分层诊断中。序号缺帧率不等于无线射频丢包率。":"历史记录/旧服务的累计序号缺帧率。";
+}
 window.renderBodyDiagnostic=function(device,state) {
   const replaying=state.mode==="REPLAY",recording=!!state.recording?.active,quality=device?.quality||{},stability=device?.stability||{};
   online=!!device?.valid;replay=null;
@@ -161,13 +169,12 @@ window.renderBodyDiagnostic=function(device,state) {
   for(const id of ["transport","host","tcpPort","serialPort"]){$(id).disabled=false;}
   $("rate").textContent=format(quality.rate_hz??quality.frame_rate??device?.rate_hz??0,1)+" Hz";
   const validFrames=quality.valid_frames??device?.frames??0,missing=quality.missing_frames??0;
-  $("lossLabel").firstChild.textContent="序号缺帧率";
-  $("loss").textContent=device?.sequence==null&&quality.sequence==null?"—":format(100*missing/Math.max(1,validFrames+missing))+"%";
+  renderBodyLoss(device,quality,replaying);
   $("invalid").textContent=quality.invalid_frames??device?.invalid_frames??0;
   $("sequence").textContent=quality.sequence??device?.sequence??"旧协议 / 无数据";
   const deviceUs=quality.device_us??device?.device_us;$("deviceTime").textContent=deviceUs==null?"—":format(deviceUs/1e6,3)+" s";
   const age=quality.age_ms??(Number.isFinite(device?.age_s)?device.age_s*1000:null);$("age").textContent=Number.isFinite(age)?format(age,0)+" ms":"—";
-  $("sensorStatus").textContent=device?`设备会话 ${device.boot_id??"旧协议未知"} · 重复 ${quality.duplicates??quality.duplicate_frames??0} · 缺帧 ${missing} · 重启 ${quality.restarts??quality.device_restarts??0} · ${stability.magnetic_message||"磁场质量待检查"}`:"传感器状态 —";
+  $("sensorStatus").textContent=device?`设备会话 ${device.boot_id??"旧协议未知"} · 重复 ${quality.duplicates??quality.duplicate_frames??0} · 累计缺帧 ${missing} · 重启 ${quality.restarts??quality.device_restarts??0} · ${stability.magnetic_message||"磁场质量待检查"}`:"传感器状态 —";
   $("calibration").textContent=(stability.message||"陀螺零偏未校准；与站姿安装参考分开")+"；零偏 °/s："+(stability.gyro_bias_dps||stability.bias||[0,0,0]).map(value=>format(value,3)).join(", ");
   if(device){const node={...device,node_id:identity,quaternion:device.quaternion||device.q||[1,0,0,0],accel:device.accel||[0,0,0],gyro:device.gyro||[0,0,0],mag:device.mag||[0,0,0],euler:device.euler_deg};renderNode(node);$("temperature").textContent=`ICM 温度 ${format(device.temperature)} °C · LIS 温度原始值 ${format(device.aux_temperature,0)}`;const frameKey=`${identity}:${validFrames}:${quality.sequence??device.sequence??""}:${state.mode}`;if(lastFrame!==frameKey){addHistory(node);lastFrame=frameKey;}}
   else{orientation=[1,0,0,0];["roll","pitch","yaw","ax","ay","az","gx","gy","gz","mx","my","mz"].forEach(id=>$(id).textContent="—");$("temperature").textContent="温度 —";}

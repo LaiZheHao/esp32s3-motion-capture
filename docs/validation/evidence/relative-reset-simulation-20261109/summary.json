@@ -1,0 +1,824 @@
+{
+  "synthetic_only": true,
+  "duration_s": 60,
+  "sample_rate_hz": 100,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "measurement_sigma_per_axis_m": 0.005,
+  "acceleration_noise_sigma_per_sample_m_s2": 0.02,
+  "bias_random_walk_m_s2_per_sqrt_s": 0.0002,
+  "constant_acceleration_bias_node_xyz_m_s2": [
+    [
+      0.012,
+      -0.008,
+      0.006
+    ],
+    [
+      -0.009,
+      0.011,
+      -0.004
+    ]
+  ],
+  "assumptions": [
+    "Exact initial position and velocity; synchronized clocks; world frame known",
+    "No attitude errors, magnetic disturbances, packet loss or calibration latency",
+    "Full signed XYZ relative-position measurement, NOT distance-only",
+    "2-second returns occur at nonzero relative velocity; velocity is never zeroed",
+    "1s/5s sensitivity supplies the correct vector at those times (not necessarily same return pose)",
+    "Both nodes share an unobservable common translation; no absolute fixes"
+  ],
+  "runs": [
+    {
+      "period_s": 1.0,
+      "seed": 0,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.305150183632968,
+          "relative_max_m": 56.63363454611337,
+          "pre_update_rmse_m": 25.830516140393133,
+          "absolute_node_rmse_m": 12.786105995331294
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6228606904501705,
+          "relative_max_m": 1.8688895218222763,
+          "pre_update_rmse_m": 1.0908150216361128,
+          "absolute_node_rmse_m": 1.869181352817046
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010309713567519236,
+          "relative_max_m": 0.024295113190309765,
+          "pre_update_rmse_m": 0.01371034403410685,
+          "absolute_node_rmse_m": 1.8430617576034745
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 1,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.46425860663567,
+          "relative_max_m": 54.90259929276075,
+          "pre_update_rmse_m": 24.974963846891313,
+          "absolute_node_rmse_m": 12.345054823088105
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6047286376430048,
+          "relative_max_m": 1.829147688756871,
+          "pre_update_rmse_m": 1.0590868677542635,
+          "absolute_node_rmse_m": 1.693167290394078
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.009347901664075972,
+          "relative_max_m": 0.024846711158526713,
+          "pre_update_rmse_m": 0.0125588114029265,
+          "absolute_node_rmse_m": 1.6659571236320618
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 2,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.33259691461722,
+          "relative_max_m": 54.38567285511487,
+          "pre_update_rmse_m": 24.836448269983798,
+          "absolute_node_rmse_m": 12.370302413422538
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.5985956261002583,
+          "relative_max_m": 1.7883086365936522,
+          "pre_update_rmse_m": 1.0475092619457707,
+          "absolute_node_rmse_m": 2.257242306026132
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010424752056935068,
+          "relative_max_m": 0.04072200519543435,
+          "pre_update_rmse_m": 0.014292102883334176,
+          "absolute_node_rmse_m": 2.237317772709421
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 3,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.90214401322618,
+          "relative_max_m": 55.61651424451931,
+          "pre_update_rmse_m": 25.41697433650496,
+          "absolute_node_rmse_m": 12.688996520328644
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6109013304226839,
+          "relative_max_m": 1.8234253337957804,
+          "pre_update_rmse_m": 1.06967946654303,
+          "absolute_node_rmse_m": 2.4646984983819675
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010450270440427798,
+          "relative_max_m": 0.04766628358920664,
+          "pre_update_rmse_m": 0.014179388272151969,
+          "absolute_node_rmse_m": 2.4457035554388726
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 4,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.35993117852903,
+          "relative_max_m": 54.77123907430029,
+          "pre_update_rmse_m": 24.87037018121203,
+          "absolute_node_rmse_m": 12.441302639218952
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6053138708781799,
+          "relative_max_m": 1.8316668347745806,
+          "pre_update_rmse_m": 1.0598077537338684,
+          "absolute_node_rmse_m": 2.554613635276008
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.011123421082567114,
+          "relative_max_m": 0.027220275561358757,
+          "pre_update_rmse_m": 0.014929278202972929,
+          "absolute_node_rmse_m": 2.536627788539908
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 5,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.048178223433236,
+          "relative_max_m": 54.4456553488012,
+          "pre_update_rmse_m": 24.559101971112835,
+          "absolute_node_rmse_m": 12.334582681418436
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6044778277362122,
+          "relative_max_m": 1.8398774193751999,
+          "pre_update_rmse_m": 1.058568534504399,
+          "absolute_node_rmse_m": 2.766687427105133
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010053110734547625,
+          "relative_max_m": 0.03622432559152834,
+          "pre_update_rmse_m": 0.013462505154343683,
+          "absolute_node_rmse_m": 2.7501338557430817
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 6,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.51801386008938,
+          "relative_max_m": 54.87350863032287,
+          "pre_update_rmse_m": 25.02711476047815,
+          "absolute_node_rmse_m": 12.45329985029086
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6035538294033446,
+          "relative_max_m": 1.8335285933892156,
+          "pre_update_rmse_m": 1.0566355746584388,
+          "absolute_node_rmse_m": 2.211898631632443
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010464230497501626,
+          "relative_max_m": 0.037164152191118884,
+          "pre_update_rmse_m": 0.014291410527353913,
+          "absolute_node_rmse_m": 2.191221948000839
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 7,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.175095258216977,
+          "relative_max_m": 56.21211451446028,
+          "pre_update_rmse_m": 25.695297970526457,
+          "absolute_node_rmse_m": 12.67971109901599
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6176935615545291,
+          "relative_max_m": 1.8338223549657957,
+          "pre_update_rmse_m": 1.081562315332758,
+          "absolute_node_rmse_m": 1.5569536195503768
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.01048837602480663,
+          "relative_max_m": 0.026654825034531624,
+          "pre_update_rmse_m": 0.014009000033014782,
+          "absolute_node_rmse_m": 1.5260228507274878
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 8,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 21.99330427257199,
+          "relative_max_m": 48.59898878180809,
+          "pre_update_rmse_m": 22.4384389783047,
+          "absolute_node_rmse_m": 11.182288369378883
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.5295890865494184,
+          "relative_max_m": 1.5615323399255676,
+          "pre_update_rmse_m": 0.927113478015963,
+          "absolute_node_rmse_m": 2.0462969285054724
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.010909860666035507,
+          "relative_max_m": 0.031142510298726618,
+          "pre_update_rmse_m": 0.01454169147544973,
+          "absolute_node_rmse_m": 2.0290994864046974
+        }
+      }
+    },
+    {
+      "period_s": 1.0,
+      "seed": 9,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.41912081024977,
+          "relative_max_m": 54.87064951413258,
+          "pre_update_rmse_m": 24.930153120747715,
+          "absolute_node_rmse_m": 12.375638663247182
+        },
+        "position_reset": {
+          "relative_rmse_m": 0.6059429487864917,
+          "relative_max_m": 1.831152026985157,
+          "pre_update_rmse_m": 1.0609882329498992,
+          "absolute_node_rmse_m": 2.0432471096666553
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.009690021963034106,
+          "relative_max_m": 0.02433169841683176,
+          "pre_update_rmse_m": 0.012766556694520498,
+          "absolute_node_rmse_m": 2.020665858324066
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 0,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.305150183632968,
+          "relative_max_m": 56.63363454611337,
+          "pre_update_rmse_m": 26.359726926706532,
+          "absolute_node_rmse_m": 12.786105995331294
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2467882341893528,
+          "relative_max_m": 3.7085002549129515,
+          "pre_update_rmse_m": 2.1818839768159606,
+          "absolute_node_rmse_m": 1.9456285089965653
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.014913339996487248,
+          "relative_max_m": 0.06197935482448204,
+          "pre_update_rmse_m": 0.024041217633914796,
+          "absolute_node_rmse_m": 1.8430696329003442
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 1,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.46425860663567,
+          "relative_max_m": 54.90259929276075,
+          "pre_update_rmse_m": 25.489396587550484,
+          "absolute_node_rmse_m": 12.345054823088105
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2109084449081338,
+          "relative_max_m": 3.637820254793786,
+          "pre_update_rmse_m": 2.1188961773752277,
+          "absolute_node_rmse_m": 1.7725591971642276
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.01461749180930251,
+          "relative_max_m": 0.06199719888407648,
+          "pre_update_rmse_m": 0.023973484117785184,
+          "absolute_node_rmse_m": 1.6659665992242256
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 2,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.33259691461722,
+          "relative_max_m": 54.38567285511487,
+          "pre_update_rmse_m": 25.34398123591809,
+          "absolute_node_rmse_m": 12.370302413422538
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.197276410427134,
+          "relative_max_m": 3.554541011278994,
+          "pre_update_rmse_m": 2.0941940915884,
+          "absolute_node_rmse_m": 2.3160162667733797
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.014794401318622617,
+          "relative_max_m": 0.062389927384015,
+          "pre_update_rmse_m": 0.024350459923349242,
+          "absolute_node_rmse_m": 2.2373239295629896
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 3,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.90214401322618,
+          "relative_max_m": 55.61651424451931,
+          "pre_update_rmse_m": 25.93547536661435,
+          "absolute_node_rmse_m": 12.688996520328644
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2228446539490987,
+          "relative_max_m": 3.620106787895155,
+          "pre_update_rmse_m": 2.1395271835546885,
+          "absolute_node_rmse_m": 2.5209672431372936
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.015610882707794111,
+          "relative_max_m": 0.06554519703071207,
+          "pre_update_rmse_m": 0.02482024209382559,
+          "absolute_node_rmse_m": 2.445710429295137
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 4,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.35993117852903,
+          "relative_max_m": 54.77123907430029,
+          "pre_update_rmse_m": 25.38450138759613,
+          "absolute_node_rmse_m": 12.441302639218952
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2115376619713205,
+          "relative_max_m": 3.6267450246540194,
+          "pre_update_rmse_m": 2.1196818603032583,
+          "absolute_node_rmse_m": 2.6079504369451603
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.01598912378820948,
+          "relative_max_m": 0.055412278891804154,
+          "pre_update_rmse_m": 0.025575771575571626,
+          "absolute_node_rmse_m": 2.536634289366246
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 5,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.048178223433236,
+          "relative_max_m": 54.4456553488012,
+          "pre_update_rmse_m": 25.073929971152694,
+          "absolute_node_rmse_m": 12.334582681418436
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2097720709061068,
+          "relative_max_m": 3.664072429571306,
+          "pre_update_rmse_m": 2.1173448601547293,
+          "absolute_node_rmse_m": 2.8158654218786032
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.014830945242913464,
+          "relative_max_m": 0.051877419998211494,
+          "pre_update_rmse_m": 0.023949211105208028,
+          "absolute_node_rmse_m": 2.750139259652072
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 6,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.51801386008938,
+          "relative_max_m": 54.87350863032287,
+          "pre_update_rmse_m": 25.5400764875087,
+          "absolute_node_rmse_m": 12.45329985029086
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2069323702150525,
+          "relative_max_m": 3.6173255722592854,
+          "pre_update_rmse_m": 2.1122676995147813,
+          "absolute_node_rmse_m": 2.2727951264772734
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.016713188647952605,
+          "relative_max_m": 0.06534024269291862,
+          "pre_update_rmse_m": 0.027230753259485624,
+          "absolute_node_rmse_m": 2.1912316360985917
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 7,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.175095258216977,
+          "relative_max_m": 56.21211451446028,
+          "pre_update_rmse_m": 26.219259505512724,
+          "absolute_node_rmse_m": 12.67971109901599
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2365627312110312,
+          "relative_max_m": 3.6530420443415927,
+          "pre_update_rmse_m": 2.1634310860452413,
+          "absolute_node_rmse_m": 1.646508453209263
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.016478314925545603,
+          "relative_max_m": 0.05858574648799996,
+          "pre_update_rmse_m": 0.026284512417079107,
+          "absolute_node_rmse_m": 1.5260360818638057
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 8,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 21.99330427257199,
+          "relative_max_m": 48.59898878180809,
+          "pre_update_rmse_m": 22.88676214172247,
+          "absolute_node_rmse_m": 11.182288369378883
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.0595061287522676,
+          "relative_max_m": 3.0922896676778895,
+          "pre_update_rmse_m": 1.8536725023007004,
+          "absolute_node_rmse_m": 2.0971059292936953
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.016840210207253015,
+          "relative_max_m": 0.05650406457834518,
+          "pre_update_rmse_m": 0.02667315956679311,
+          "absolute_node_rmse_m": 2.029109624350746
+        }
+      }
+    },
+    {
+      "period_s": 2.0,
+      "seed": 9,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.41912081024977,
+          "relative_max_m": 54.87064951413258,
+          "pre_update_rmse_m": 25.44490013909706,
+          "absolute_node_rmse_m": 12.375638663247182
+        },
+        "position_reset": {
+          "relative_rmse_m": 1.2128233585511632,
+          "relative_max_m": 3.6254185654275104,
+          "pre_update_rmse_m": 2.1220998569995975,
+          "absolute_node_rmse_m": 2.10969243294537
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.014790326276641876,
+          "relative_max_m": 0.061687586631522184,
+          "pre_update_rmse_m": 0.02420437708406008,
+          "absolute_node_rmse_m": 2.0206735820767703
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 0,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.305150183632968,
+          "relative_max_m": 56.63363454611337,
+          "pre_update_rmse_m": 27.950850785073612,
+          "absolute_node_rmse_m": 12.786105995331294
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.093759275533236,
+          "relative_max_m": 9.0486653796135,
+          "pre_update_rmse_m": 5.452072926232892,
+          "absolute_node_rmse_m": 2.40617677728153
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.06040862170471615,
+          "relative_max_m": 0.3876247159660315,
+          "pre_update_rmse_m": 0.12826286431036957,
+          "absolute_node_rmse_m": 1.8433020290191222
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 1,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.46425860663567,
+          "relative_max_m": 54.90259929276075,
+          "pre_update_rmse_m": 27.036468044578445,
+          "absolute_node_rmse_m": 12.345054823088105
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.0037585969143428,
+          "relative_max_m": 8.846306036654987,
+          "pre_update_rmse_m": 5.293962768772416,
+          "absolute_node_rmse_m": 2.2429963707278344
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.059449272461908495,
+          "relative_max_m": 0.37733389226986747,
+          "pre_update_rmse_m": 0.12519196224461177,
+          "absolute_node_rmse_m": 1.6662157261180484
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 2,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.33259691461722,
+          "relative_max_m": 54.38567285511487,
+          "pre_update_rmse_m": 26.870169139835095,
+          "absolute_node_rmse_m": 12.370302413422538
+        },
+        "position_reset": {
+          "relative_rmse_m": 2.9681174477699543,
+          "relative_max_m": 8.670370910637224,
+          "pre_update_rmse_m": 5.229810207435183,
+          "absolute_node_rmse_m": 2.684770743128115
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.06278138797325057,
+          "relative_max_m": 0.38862023207196045,
+          "pre_update_rmse_m": 0.13072755282803855,
+          "absolute_node_rmse_m": 2.2375319043281916
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 3,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.90214401322618,
+          "relative_max_m": 55.61651424451931,
+          "pre_update_rmse_m": 27.494031058553922,
+          "absolute_node_rmse_m": 12.688996520328644
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.0346282085272382,
+          "relative_max_m": 8.821939401019325,
+          "pre_update_rmse_m": 5.345920488832837,
+          "absolute_node_rmse_m": 2.87813840355977
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.05782235593145239,
+          "relative_max_m": 0.37748489836420945,
+          "pre_update_rmse_m": 0.12133749004928022,
+          "absolute_node_rmse_m": 2.445868850788946
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 4,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.35993117852903,
+          "relative_max_m": 54.77123907430029,
+          "pre_update_rmse_m": 26.93105920990094,
+          "absolute_node_rmse_m": 12.441302639218952
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.003650316475444,
+          "relative_max_m": 8.840608212039921,
+          "pre_update_rmse_m": 5.294552407194217,
+          "absolute_node_rmse_m": 2.9478684520996654
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.05789668677260811,
+          "relative_max_m": 0.34452181383682867,
+          "pre_update_rmse_m": 0.12091930879378139,
+          "absolute_node_rmse_m": 2.5367868675853575
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 5,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.048178223433236,
+          "relative_max_m": 54.4456553488012,
+          "pre_update_rmse_m": 26.62228378839304,
+          "absolute_node_rmse_m": 12.334582681418436
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.0002714769347643,
+          "relative_max_m": 8.922599906282239,
+          "pre_update_rmse_m": 5.290257554992021,
+          "absolute_node_rmse_m": 3.1326694993363935
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.054657815314482654,
+          "relative_max_m": 0.33556316296782324,
+          "pre_update_rmse_m": 0.11516728884393669,
+          "absolute_node_rmse_m": 2.7502650467617094
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 6,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.51801386008938,
+          "relative_max_m": 54.87350863032287,
+          "pre_update_rmse_m": 27.08261187119374,
+          "absolute_node_rmse_m": 12.45329985029086
+        },
+        "position_reset": {
+          "relative_rmse_m": 2.9957497224588194,
+          "relative_max_m": 8.830786759590001,
+          "pre_update_rmse_m": 5.279595056551589,
+          "absolute_node_rmse_m": 2.6542523147345354
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.06007296301537243,
+          "relative_max_m": 0.3842663916345279,
+          "pre_update_rmse_m": 0.1278454852950371,
+          "absolute_node_rmse_m": 2.1914215570245665
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 7,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 25.175095258216977,
+          "relative_max_m": 56.21211451446028,
+          "pre_update_rmse_m": 27.794008910920347,
+          "absolute_node_rmse_m": 12.67971109901599
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.068831531171509,
+          "relative_max_m": 8.912123462292476,
+          "pre_update_rmse_m": 5.405721908397754,
+          "absolute_node_rmse_m": 2.1640586824558747
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.05800327670076508,
+          "relative_max_m": 0.36247205792660003,
+          "pre_update_rmse_m": 0.12103171073768931,
+          "absolute_node_rmse_m": 1.5262894006254337
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 8,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 21.99330427257199,
+          "relative_max_m": 48.59898878180809,
+          "pre_update_rmse_m": 24.234430245640052,
+          "absolute_node_rmse_m": 11.182288369378883
+        },
+        "position_reset": {
+          "relative_rmse_m": 2.6305518265539365,
+          "relative_max_m": 7.547532467185065,
+          "pre_update_rmse_m": 4.632522852434369,
+          "absolute_node_rmse_m": 2.4180913335747745
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.058579227085270885,
+          "relative_max_m": 0.35201259210373703,
+          "pre_update_rmse_m": 0.1233073258633556,
+          "absolute_node_rmse_m": 2.029303538390535
+        }
+      }
+    },
+    {
+      "period_s": 5.0,
+      "seed": 9,
+      "metrics": {
+        "unconstrained": {
+          "relative_rmse_m": 24.41912081024977,
+          "relative_max_m": 54.87064951413258,
+          "pre_update_rmse_m": 26.99214681804092,
+          "absolute_node_rmse_m": 12.375638663247182
+        },
+        "position_reset": {
+          "relative_rmse_m": 3.007095367193384,
+          "relative_max_m": 8.820825807451753,
+          "pre_update_rmse_m": 5.299584028984924,
+          "absolute_node_rmse_m": 2.5186747852222013
+        },
+        "position_velocity_bias_filter": {
+          "relative_rmse_m": 0.059419809679791116,
+          "relative_max_m": 0.37512790662726886,
+          "pre_update_rmse_m": 0.12469492829270766,
+          "absolute_node_rmse_m": 2.0208784513945215
+        }
+      }
+    }
+  ],
+  "median_metrics": {
+    "1.0": {
+      "unconstrained": {
+        "relative_rmse_m": 24.44168970844272,
+        "relative_max_m": 54.87207907222772,
+        "pre_update_rmse_m": 24.952558483819516,
+        "absolute_node_rmse_m": 12.408470651233067
+      },
+      "position_reset": {
+        "relative_rmse_m": 0.6050212542605924,
+        "relative_max_m": 1.831409430879869,
+        "pre_update_rmse_m": 1.059447310744066,
+        "absolute_node_rmse_m": 2.1290977800689577
+      },
+      "position_velocity_bias_filter": {
+        "relative_rmse_m": 0.010437511248681433,
+        "relative_max_m": 0.02918139293004269,
+        "pre_update_rmse_m": 0.014094194152583376,
+        "absolute_node_rmse_m": 2.110160717202768
+      }
+    },
+    "2.0": {
+      "unconstrained": {
+        "relative_rmse_m": 24.44168970844272,
+        "relative_max_m": 54.87207907222772,
+        "pre_update_rmse_m": 25.467148363323773,
+        "absolute_node_rmse_m": 12.408470651233067
+      },
+      "position_reset": {
+        "relative_rmse_m": 1.2112230534397272,
+        "relative_max_m": 3.626081795040765,
+        "pre_update_rmse_m": 2.1192890188392433,
+        "absolute_node_rmse_m": 2.191243779711322
+      },
+      "position_velocity_bias_filter": {
+        "relative_rmse_m": 0.01526211135214068,
+        "relative_max_m": 0.06183347072800211,
+        "pre_update_rmse_m": 0.024585351008587414,
+        "absolute_node_rmse_m": 2.110170630224669
+      }
+    },
+    "5.0": {
+      "unconstrained": {
+        "relative_rmse_m": 24.44168970844272,
+        "relative_max_m": 54.87207907222772,
+        "pre_update_rmse_m": 27.014307431309682,
+        "absolute_node_rmse_m": 12.408470651233067
+      },
+      "position_reset": {
+        "relative_rmse_m": 3.0037044566948934,
+        "relative_max_m": 8.835697485814961,
+        "pre_update_rmse_m": 5.294257587983317,
+        "absolute_node_rmse_m": 2.5864635499783684
+      },
+      "position_velocity_bias_filter": {
+        "relative_rmse_m": 0.058999518382531,
+        "relative_max_m": 0.37623089944856813,
+        "pre_update_rmse_m": 0.12400112707803163,
+        "absolute_node_rmse_m": 2.1103625477075507
+      }
+    }
+  }
+}
