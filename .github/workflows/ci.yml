@@ -67,12 +67,16 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror ../firmware/tests/test_frame_tx_queue.cpp -o "$RUNNER_TEMP/test_frame_tx_queue"
           "$RUNNER_TEMP/test_frame_tx_queue"
+      - name: Test onboard motion integration
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror ../firmware/tests/test_onboard_motion.cpp -o "$RUNNER_TEMP/test_onboard_motion"
+          "$RUNNER_TEMP/test_onboard_motion"
 
   firmware:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [esp32-s3-devkitm-1, esp32-s3-client-b]
+        environment: [esp32-s3-devkitm-1, esp32-s3-client-b, esp32-s3-motion-usb]
     defaults:
       run:
         working-directory: firmware
