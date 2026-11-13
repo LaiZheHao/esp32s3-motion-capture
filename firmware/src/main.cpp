@@ -7,6 +7,10 @@
 #include <lwip/sockets.h>
 #include <errno.h>
 #include "frame_tx_queue.h"
+#ifdef IMU_ONBOARD_MOTION
+#include "onboard_motion.h"
+static OnboardMotion onboardMotion;
+#endif
 #if __has_include("node_config.h")
 #include "node_config.h"
 #else
@@ -24,7 +28,13 @@
 #define IMU_USE_MAC_NODE_ID 1
 #endif
 static char nodeId[33];
+#ifdef IMU_ONBOARD_MOTION
+static constexpr char FIRMWARE_VERSION[] = "imu-motion-usb-20261114-r1";
+#undef IMU_BODY_SLOT
+#define IMU_BODY_SLOT "unassigned"
+#else
 static constexpr char FIRMWARE_VERSION[] = "imu-body-node-20261027-r5";
+#endif
 static char bootId[17];
 static_assert(sizeof(IMU_BODY_SLOT) <= 33, "Body slot token is too long");
 static_assert(sizeof(IMU_NODE_CONFIG_VERSION) <= 65, "Config version token is too long");
@@ -354,6 +364,23 @@ void loop() {
   }
 
   // ---- 串口输出 ----
+#ifdef IMU_ONBOARD_MOTION
+  while (Serial.available()) {
+    const int command=Serial.read();
+    if(command=='R') onboardMotion.reset();
+    if(command=='Z') onboardMotion.zupt=true;
+    if(command=='N') onboardMotion.zupt=false;
+  }
+  const float motionAcc[3]={ax,ay,az},motionGyro[3]={gx,gy,gz};
+  onboardMotion.update(sampledAtUs,motionAcc,motionGyro);
+  if(sequence%4==0 && Serial) {
+    char motionLine[384];
+    const int size=snprintf(motionLine,sizeof(motionLine),"[MOTION1],%lu,%lu,%u,%u,%u,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
+      static_cast<unsigned long>(sequence),static_cast<unsigned long>(sampledAtUs),onboardMotion.ready?1U:0U,onboardMotion.held?1U:0U,onboardMotion.count,
+      ax*9.80665f,ay*9.80665f,az*9.80665f,onboardMotion.a[0],onboardMotion.a[1],onboardMotion.a[2],onboardMotion.v[0],onboardMotion.v[1],onboardMotion.v[2],onboardMotion.p[0],onboardMotion.p[1],onboardMotion.p[2]);
+    if(size>0 && static_cast<size_t>(size)<sizeof(motionLine) && Serial.availableForWrite()>=size) Serial.write(reinterpret_cast<const uint8_t *>(motionLine),static_cast<size_t>(size));
+  }
+#endif
   char line[512];
   // 磁力计灵敏度 1.5 mgauss/LSB；加速度保持 g，与串口协议一致。
   const int written = snprintf(line, sizeof(line),
