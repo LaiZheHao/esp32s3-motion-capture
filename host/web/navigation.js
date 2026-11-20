@@ -4,8 +4,12 @@
   const names={dashboard:"实时总览",calibration:"设备标定",records:"历史记录与导出",trash:"回收站",replay:"姿态回放",advanced:"高级设置"};
   const routeFromHash=hash=>{const value=String(hash||"").replace(/^#\/?/,"");return ROUTES.includes(value)?value:"dashboard";};
   function applyRoute(route,{views,links}){const selected=ROUTES.includes(route)?route:"dashboard";views.forEach(view=>view.hidden=view.dataset.view!==selected);links.forEach(link=>{link.classList.toggle("active",link.dataset.route===selected);link.setAttribute("aria-current",link.dataset.route===selected?"page":"false");});return selected;}
-  let active="dashboard",bodyState=null,step=0,items=[],historySelection=null,archive=null,historyGeneration=0,replayFrames=null,replaySession=null;
+  let active="dashboard",bodyState=null,step=0,items=[],historySelection=null,historyGeneration=0,replayFrames=null,replaySession=null;
   let historyRequest=0,trashRequest=0;
+  let trashItems=[];
+  let exportingMotion=false, exportingZip=false, replayPreview=null, replayPreviewRequest=0, historyReplayView=null;
+  const motionFaces=["+X","-X","+Y","-Y","+Z","-Z"];
+  const motionFaceCache="imu-displacement-calibration-faces";
   const $=id=>document.getElementById(id);
   function navigate(route){
     const next=routeFromHash("#/"+route),hash="#/"+next;
@@ -25,6 +29,7 @@
     charts.querySelector("h2").textContent=active==="replay"?"保存传感器曲线":"实时传感器曲线";
     if(active==="records"){refreshHistory();root.refreshLegacySessions?.();}
     if(active==="trash")refreshTrash();
+    if(active!=="records"&&$("history-replay"))closeHistoryReplay();
     document.dispatchEvent(new CustomEvent("app-route-change",{detail:{route:active}}));
   }
   function make(tag,className,html=""){const element=document.createElement(tag);element.className=className;element.innerHTML=html;return element;}
@@ -48,29 +53,46 @@
       }
       if(!items.length)list.textContent="尚无动作记录。连接设备后，在总览开始记录。";
       const selected=historySelection?.id||$("bodySessions").value;
-      selectHistory(items.find(item=>item.id===selected)||items[0]||null);
+      selectHistory(items.find(item=>item.id===selected)||items[0]||null,true);
     }catch(error){if(request===historyRequest)list.textContent=error.message;}
   }
-  function selectHistory(item){
-    if(historySelection?.id!==item?.id){
-      archive=null;historyGeneration++;
-      for(let i=0;i<3;i++){
-        const canvas=$("history-chart-"+i);
-        canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);
-      }
-      $("preview-status").textContent="选择会话后读取曲线";
-    }
+  function selectHistory(item, reload=false){
+    const changed=historySelection?.id!==item?.id||historySelection?.status!==item?.status;
     historySelection=item;
-    if(!item){
-      $("history-title").textContent="选择一条记录";$("history-meta").textContent="尚无会话详情";
-      for(const id of ["history-open","history-preview","history-csv","bodyExport"])$(id).disabled=true;
-      return;
+    const id=item?.id||item?.session;
+    const count=item?.counts?.samples??0;
+    const duration=Number.isFinite(item?.duration_s)?item.duration_s.toFixed(2)+" 秒":"—";
+    const description=item?.description||{};
+    $("history-title").textContent=item?sessionLabel(item):"选择一条记录";
+    $("history-notes").textContent=description.notes||"";
+    $("history-notes").hidden=!description.notes;
+    $("history-edit").disabled=!item;
+    $("history-edit").onclick=()=>openSessionEdit(item);
+    $("history-meta").textContent=item
+      ?[sessionTime(item),duration,count+" 个样本",item.calibration_protected?"标定":null].filter(Boolean).join(" · ")
+      :"";
+    $("history-open").disabled=item?.status!=="complete"||!item.counts?.body_frames;
+    $("history-open").onclick=()=>openHistoryReplay(item);
+    $("bodyExport").disabled=!item||exportingZip||isRecording(item);
+    $("history-measure").disabled=exportingMotion||!items.some(canMeasure);
+    $("bodySessions").value=id||"";
+    $("bodySessions").dispatchEvent(new Event("change"));
+    for(const row of $("history-list").querySelectorAll(".history-item")){
+      row.setAttribute("aria-pressed",String(row.dataset.session===id));
     }
-    const id=item.id||item.session;$("history-title").textContent=id;$("history-meta").textContent=JSON.stringify({状态:item.status||"未知",开始时间:sessionTime(item),时长秒:item.duration_s??"—",采样数:item.counts?.samples??0,标定保护:item.calibration_protected?"已启用":"—",引用测量:item.referenced_by||[],骨架帧:item.counts?.body_frames??0,来源:item.source_types||[],事件:item.counts?.events??0},null,2);$("bodySessions").value=id;$("bodySessions").dispatchEvent(new Event("change"));
-    const activeRecording=bodyState?.recording?.active&&bodyState.recording.session===id;
-    $("bodyExport").disabled=activeRecording;$("bodyExport").onclick=async()=>{const b=$("bodyExport");b.disabled=true;b.setAttribute("aria-busy","true");$("preview-status").textContent="正在准备完整 ZIP…";try{const response=await fetch(`/api/body/recordings/${encodeURIComponent(id)}/download`);if(!response.ok)throw new Error("导出失败，请确认会话已停止并完整保存");const url=URL.createObjectURL(await response.blob()),link=document.createElement("a");link.href=url;link.download=id+".zip";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$("preview-status").textContent="完整 ZIP 已交给浏览器保存";}catch(error){$("preview-status").textContent=error.message;}finally{b.disabled=false;b.removeAttribute("aria-busy");}};
-    $("history-open").disabled=activeRecording;$("history-open").onclick=()=>{$("bodyReplayOpen").click();navigate("replay");};
-    $("history-preview").disabled=activeRecording;$("history-csv").disabled=activeRecording;
+    if(changed)closeHistoryReplay();
+    if(changed||reload)previewHistory(item);
+  }
+
+  function canMeasure(item){
+    return item.status==="complete"&&(item.counts?.samples??0)>0
+      && (!item.source_types?.length||item.source_types.every(source=>source==="real"));
+  }
+  function isRecording(item){
+    const recording=bodyState?.recording;
+    return item&&(recording
+      ? recording.session===item.id&&(recording.active||recording.saving)
+      : Boolean(item.busy_reason&&item.status!=="complete"));
   }
   async function sessionRequest(url,method="GET",data){
     const options={method};
@@ -84,10 +106,17 @@
   function sessionTime(item){
     return Number.isFinite(item.started_unix)?new Date(item.started_unix*1000).toLocaleString():"未知";
   }
+  function sessionLabel(item){
+    const data=item.description||{};
+    const pieces=[data.title||item.id,data.calibration_method,data.calibration_face&&data.calibration_face+" 朝上"];
+    return pieces.filter(Boolean).join(" · ");
+  }
   function historyRow(item){
     const row=make("div","history-row"),choose=button("",()=>selectHistory(item)),more=button("⋯",()=>openSessionMenu(item,more));
-    choose.textContent=item.id;
+    choose.textContent=sessionLabel(item);
+    choose.title=item.id;
     choose.className="history-item";
+    choose.dataset.session=item.id;
     more.className="history-more";
     more.setAttribute("aria-label",item.id+" 的操作");
     more.setAttribute("aria-controls","history-menu");
@@ -118,13 +147,15 @@
       }catch(error){$("history-status").textContent=error.message;}
     });
     remove.disabled=Boolean(reason);mark.disabled=Boolean(busy);
-    menu.replaceChildren(remove,mark);
+    const edit=button("编辑会话信息",()=>{menu.hidePopover();openSessionEdit(item);});
+    edit.disabled=Boolean(isRecording(item));
+    menu.replaceChildren(edit,mark,remove);
     if(reason){const note=make("p","subtle");note.textContent=reason;menu.append(note);}
     menu.showPopover();
     const anchorBox=anchor.getBoundingClientRect(),size=menu.getBoundingClientRect();
     menu.style.left=Math.max(0,Math.min(event?.clientX??anchorBox.left,root.innerWidth-size.width))+"px";
     menu.style.top=Math.max(0,Math.min(event?.clientY??anchorBox.bottom,root.innerHeight-size.height))+"px";
-    (remove.disabled?mark:remove).focus();
+    (edit.disabled?mark:edit).focus();
   }
   function confirmRecycle(item){
     const dialog=$("history-delete"),submit=$("history-delete-submit"),cancel=$("history-delete-cancel");
@@ -147,14 +178,19 @@
   }
   async function refreshTrash(){
     const request=++trashRequest,list=$("trash-list");
+    trashItems=[];
+    $("trash-empty").disabled=true;
+    $("trash-capacity").textContent="—";
     list.textContent="读取回收站中…";
     try{
       const result=await sessionRequest("/api/body/trash");
       if(request!==trashRequest)return;
-      $("trash-capacity").textContent=`${result.items.length} / ${result.limit} 条`;
+      trashItems=result.items;
+      $("trash-capacity").textContent=`${trashItems.length} / ${result.limit} 条`;
+      $("trash-empty").disabled=!trashItems.length;
       list.replaceChildren();
-      if(!result.items.length)list.textContent="回收站里没有本开发台的会话。";
-      for(const item of result.items){
+      if(!trashItems.length)list.textContent="回收站里没有本开发台的会话。";
+      for(const item of trashItems){
         const row=make("div","trash-row"),info=make("div",""),title=make("strong",""),detail=make("p","subtle");
         title.textContent=item.id;
         const deleted=item.deleted_at?new Date(item.deleted_at).toLocaleString():"未知";
@@ -172,30 +208,283 @@
       }
     }catch(error){if(request===trashRequest)list.textContent=error.message;}
   }
-  async function loadArchive(){if(archive)return archive;const id=historySelection?.id||historySelection?.session;if(!id)throw new Error("请先选择会话");const response=await fetch(`/api/body/recordings/${encodeURIComponent(id)}/download`);if(!response.ok)throw new Error("无法读取记录，请先停止录制");const buffer=await response.arrayBuffer();return buffer;}
-  async function previewHistory(){const generation=historyGeneration,b=$("history-preview");b.disabled=true;b.setAttribute("aria-busy","true");$("preview-status").textContent="读取保存数据中…";try{const buffer=await loadArchive();if(generation!==historyGeneration)return;archive=buffer;const text=await root.SessionArchive.extract(buffer,"body_frames.jsonl");if(generation!==historyGeneration)return;const rows=text.trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
-      const stride=Math.max(1,Math.ceil(rows.length/400)),shown=rows.filter((_,i)=>i%stride===0);["accel","gyro","mag"].forEach((key,index)=>{const canvas=$("history-chart-"+index),ctx=canvas.getContext("2d"),box=canvas.getBoundingClientRect();canvas.width=box.width*2;canvas.height=box.height*2;ctx.scale(2,2);const samples=shown.map(row=>row.data.selected_node||row.data.devices?.[0]).map(d=>d?.[key]||[0,0,0]);let range=Math.max(.01,...samples.flat().map(Math.abs));["#ff6573","#49e39e","#617cff"].forEach((color,axis)=>{ctx.strokeStyle=color;ctx.beginPath();samples.forEach((s,i)=>{const x=i*box.width/Math.max(1,samples.length-1),y=box.height/2-s[axis]/range*(box.height*.4);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});});
-      $("preview-status").textContent=`已显示保存帧曲线 · ${rows.length} 帧 · 预览最多 400 点`;
-    }catch(error){$("preview-status").textContent=error.message;}finally{b.disabled=false;b.removeAttribute("aria-busy");}}
-  async function exportMotionCsv(){
-    const id=historySelection?.id||historySelection?.session;
-    if(!id)return;
-    const button=$("history-csv"),status=$("preview-status");
-    button.disabled=true;
-    button.setAttribute("aria-busy","true");
+  function confirmEmptyTrash(){
+    const trashIds=trashItems.map(item=>item.trash_id);
+    if(!trashIds.length)return;
+    const dialog=$("trash-empty-dialog"),submit=$("trash-empty-submit"),cancel=$("trash-empty-cancel");
+    const status=$("trash-status");
+    $("trash-empty-details").textContent=`将永久删除本开发台回收站中的全部 ${trashIds.length} 条会话及其文件。删除后无法还原。`;
+    submit.onclick=async()=>{
+      submit.disabled=cancel.disabled=true;
+      status.textContent="正在清空回收站…";
+      try{
+        const result=await sessionRequest("/api/body/trash","DELETE",{trash_ids:trashIds});
+        status.textContent=`已永久删除 ${result.deleted} 条会话`;
+      }catch(error){status.textContent=error.message;}
+      finally{
+        dialog.close();
+        submit.disabled=cancel.disabled=false;
+        await refreshTrash();
+      }
+    };
+    dialog.showModal();
+    cancel.focus();
+  }
+  function openSessionEdit(item){
+    if(!item)return;
+    const dialog=$("history-edit-dialog"),form=$("history-edit-form"),status=$("history-edit-status");
+    const description=item.description||{};
+    for(const key of ["title","calibration_method","calibration_face","notes"]){
+      form.elements.namedItem(key).value=description[key]||"";
+    }
+    $("history-edit-id").textContent=item.id;
+    status.textContent="";
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      const changes=Object.fromEntries(new FormData(form));
+      changes.calibration_face||=null;
+      const actions=[...form.querySelectorAll("button")];
+      actions.forEach(control=>control.disabled=true);
+      try{
+        await sessionRequest("/api/body/recordings/"+encodeURIComponent(item.id)+"/description","PUT",changes);
+        dialog.close();
+        await refreshHistory();
+      }catch(error){status.textContent=error.message;}
+      finally{actions.forEach(control=>control.disabled=false);}
+    };
+    dialog.showModal();
+  }
+
+  async function previewHistory(item){
+    const generation=++historyGeneration,status=$("preview-status"),table=$("history-samples");
+    const endpoint=$("history-endpoint");
+    table.tHead.replaceChildren();
+    table.tBodies[0].replaceChildren();
+    table.hidden=true;
+    endpoint.hidden=true;
+    if(!item){status.textContent="从左侧选择一条记录。";return;}
+    if(item.status!=="complete"){
+      status.textContent="会话完整保存后可解算并预览。";
+      return;
+    }
+    status.textContent="正在读取位移结果…";
     try{
-      const response=await fetch(`/api/body/recordings/${encodeURIComponent(id)}/motion-csv`);
-      if(!response.ok)throw new Error("无法读取单节点结果，请确认已运行位移测量工具并重启开发台加载新版");
-      const url=URL.createObjectURL(await response.blob()),link=document.createElement("a");
-      link.href=url;
-      link.download=id+"-single_node_motion.csv";
-      link.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-      status.textContent="已导出单节点运动结果 CSV";
+      const result=await sessionRequest("/api/body/recordings/"+encodeURIComponent(item.id)+"/motion-preview");
+      if(generation!==historyGeneration)return;
+      if(!result.rows.length){
+        status.textContent="该会话尚未解算。点击右侧「解算并导出 CSV」选择六面标定，也可只解算并预览。";
+        return;
+      }
+      const header=table.tHead.insertRow();
+      for(const title of result.columns){
+        const cell=document.createElement("th");
+        cell.scope="col";
+        cell.textContent=title;
+        header.append(cell);
+      }
+      for(const values of result.rows){
+        const row=table.tBodies[0].insertRow();
+        for(const value of values)row.insertCell().textContent=value;
+      }
+      table.hidden=false;
+      status.textContent="与导出 CSV 一致，每秒一行。";
+      if(result.endpoint){
+        const {displacement_m,distance_m,duration_s}=result.endpoint;
+        const xyz=displacement_m.map(value=>value.toFixed(3));
+        endpoint.textContent=`实际终点（${duration_s.toFixed(3)} s） · X ${xyz[0]} / Y ${xyz[1]} / Z ${xyz[2]} m · 距起点 ${distance_m.toFixed(3)} m`;
+        endpoint.hidden=false;
+      }
+    }catch(error){
+      if(generation===historyGeneration)status.textContent=error.message;
+    }
+  }
+
+  function closeHistoryReplay(){
+    replayPreviewRequest++;
+    if(replayPreview?.animation)cancelAnimationFrame(replayPreview.animation);
+    replayPreview=null;
+    $("history-replay").hidden=true;
+    $("history-replay-toggle").disabled=true;
+    $("history-replay-seek").disabled=true;
+  }
+
+  async function openHistoryReplay(item){
+    closeHistoryReplay();
+    const request=replayPreviewRequest,status=$("history-replay-status");
+    const canvas=$("history-replay-canvas");
+    $("history-replay").hidden=false;
+    canvas.hidden=true;
+    $("history-replay-time").textContent="—";
+    status.textContent="正在读取保存的姿态…";
+    try{
+      const response=await fetch("/api/body/recordings/"+encodeURIComponent(item.id)+"/download");
+      if(!response.ok)throw new Error("无法读取该会话的保存姿态");
+      const text=await root.SessionArchive.extract(await response.arrayBuffer(),"body_frames.jsonl");
+      if(request!==replayPreviewRequest)return;
+      const frames=text.trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
+      if(!frames.length)throw new Error("该会话没有保存的姿态帧。");
+      const duration=frames.at(-1).time_s;
+      historyReplayView??=new root.BodyView.BodyView(canvas,{kind:"boards"});
+      historyReplayView.reset();
+      replayPreview={frames,duration,view:historyReplayView,playing:false,time:0};
+      const kind=$("history-replay-kind");
+      const measured=frames.some(frame=>frame.data.body_frame?.segments?.some(segment=>segment.measured));
+      kind.value=measured?"fixed":"boards";
+      kind.options[1].disabled=!measured;
+      const seek=$("history-replay-seek");
+      seek.max=duration;
+      $("history-replay-toggle").disabled=seek.disabled=false;
+      canvas.hidden=false;
+      status.textContent=sessionLabel(item);
+      drawHistoryReplay();
+    }catch(error){
+      if(request===replayPreviewRequest)status.textContent=error.message;
+    }
+  }
+
+  function drawHistoryReplay(){
+    const replay=replayPreview;
+    if(!replay)return;
+    let lo=0,hi=replay.frames.length;
+    while(lo<hi){
+      const mid=(lo+hi)>>1;
+      if(replay.frames[mid].time_s<=replay.time)lo=mid+1;
+      else hi=mid;
+    }
+    const frame=replay.frames[Math.max(0,lo-1)].data;
+    replay.view.kind=$("history-replay-kind").value;
+    replay.view.draw(frame.body_frame,{devices:frame.devices||[],mode:"REPLAY"});
+    $("history-replay-seek").value=replay.time;
+    $("history-replay-time").textContent=`${replay.time.toFixed(2)} / ${replay.duration.toFixed(2)} s`;
+    $("history-replay-toggle").textContent=replay.playing?"暂停":"播放";
+  }
+
+  function toggleHistoryReplay(){
+    const replay=replayPreview;
+    if(!replay)return;
+    replay.playing=!replay.playing;
+    if(replay.playing){
+      if(replay.time>=replay.duration)replay.time=0;
+      replay.started=performance.now()-replay.time*1000;
+      const next=now=>{
+        if(replayPreview!==replay||!replay.playing)return;
+        replay.time=Math.min(replay.duration,(now-replay.started)/1000);
+        replay.playing=replay.time<replay.duration;
+        drawHistoryReplay();
+        if(replay.playing)replay.animation=requestAnimationFrame(next);
+      };
+      replay.animation=requestAnimationFrame(next);
+    }else cancelAnimationFrame(replay.animation);
+    drawHistoryReplay();
+  }
+
+  function downloadFile(blob, filename){
+    const url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;
+    link.download=filename;
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  async function exportHistoryZip(){
+    const id=historySelection?.id;
+    if(!id||exportingZip)return;
+    const status=$("history-export-status");
+    exportingZip=true;
+    $("bodyExport").disabled=true;
+    status.textContent="正在准备完整 ZIP…";
+    try{
+      const response=await fetch("/api/body/recordings/"+encodeURIComponent(id)+"/download");
+      if(!response.ok)throw new Error("导出失败，请确认会话已停止并完整保存");
+      downloadFile(await response.blob(),id+".zip");
+      status.textContent="完整 ZIP 已交给浏览器保存";
     }catch(error){status.textContent=error.message;}
-    finally{button.disabled=false;button.removeAttribute("aria-busy");}
+    finally{
+      exportingZip=false;
+      $("bodyExport").disabled=!historySelection||isRecording(historySelection);
+    }
+  }
+
+  function selectOptions(select, list, placeholder, preferred){
+    select.replaceChildren(new Option(placeholder,""));
+    for(const item of list){
+      const label=sessionLabel(item)+(item.calibration_protected?"（标定）":"")
+        +(item.description?.title?" · "+item.id:"");
+      select.add(new Option(label,item.id));
+    }
+    if(list.some(item=>item.id===preferred))select.value=preferred;
+  }
+
+  function updateMotionFaces(preferred){
+    const session=$("history-measure-session").value;
+    const eligible=items.filter(item=>canMeasure(item)&&item.id!==session);
+    const options=[...eligible.filter(item=>item.calibration_protected),
+      ...eligible.filter(item=>!item.calibration_protected)];
+    document.querySelectorAll("#history-measure-faces select").forEach(select=>{
+      const face=select.dataset.face;
+      const taggedForFace=options.filter(item=>item.description?.calibration_face===face);
+      const available=options.filter(item=>!item.description?.calibration_face||item.description.calibration_face===face);
+      const selected=(preferred||{})[face]||select.value;
+      selectOptions(select,available,"选择静置会话",selected);
+      if(!select.value&&taggedForFace.length===1)select.value=taggedForFace[0].id;
+    });
+  }
+
+  function openMotionExport(){
+    if(exportingMotion)return;
+    const dialog=$("history-measure-dialog"), select=$("history-measure-session");
+    const eligible=items.filter(canMeasure);
+    const motions=[...eligible.filter(item=>!item.calibration_protected),
+      ...eligible.filter(item=>item.calibration_protected)];
+    selectOptions(select,motions,"选择一条动作记录",historySelection?.id);
+    if(!select.value&&motions.length===1)select.value=motions[0].id;
+    let saved={};
+    try{saved=JSON.parse(localStorage.getItem(motionFaceCache)||"{}")||{};}catch{}
+    updateMotionFaces(saved);
+    $("history-measure-error").textContent="";
+    dialog.showModal();
+    select.focus();
+  }
+
+  async function exportMeasuredMotion(event){
+    event.preventDefault();
+    if(exportingMotion)return;
+    const form=event.currentTarget,dialog=$("history-measure-dialog"),error=$("history-measure-error");
+    const id=$("history-measure-session").value;
+    const faces=Object.fromEntries([...$("history-measure-faces").querySelectorAll("select")]
+      .map(select=>[select.dataset.face,select.value]));
+    if(!id||Object.values(faces).some(value=>!value)||new Set(Object.values(faces)).size!==motionFaces.length){
+      error.textContent="请选择一条动作，以及六条不同方向的静置记录。";
+      return;
+    }
+    const download=event.submitter?.value!=="preview";
+    const start_still=$("history-measure-start").valueAsNumber,end_still=$("history-measure-end").valueAsNumber;
+    exportingMotion=true;
+    const controls=[...form.querySelectorAll("button, select, input")];
+    controls.forEach(control=>control.disabled=true);
+    error.textContent="正在解算所选记录…";
+    try{
+      const result=await sessionRequest("/api/body/recordings/"+encodeURIComponent(id)+"/measure-motion",
+        "POST",{faces,start_still,end_still});
+      try{localStorage.setItem(motionFaceCache,JSON.stringify(faces));}catch{}
+      if(download)downloadFile(new Blob(["\ufeff",result.csv],{type:"text/csv;charset=utf-8"}),
+        id+"-single_node_motion.csv");
+      const position=result.summary.displacement_m.map(value=>value.toFixed(3));
+      $("history-export-status").textContent=`${id} · 终点 X ${position[0]} / Y ${position[1]} / Z ${position[2]} m · ${download?"已提交 CSV 下载":"已生成预览"}`;
+      dialog.close();
+      await refreshHistory();
+      const measured=items.find(item=>item.id===id);
+      if(measured&&active==="records")selectHistory(measured);
+    }catch(failure){error.textContent=failure.message;}
+    finally{
+      exportingMotion=false;
+      controls.forEach(control=>control.disabled=false);
+      $("history-measure").disabled=!items.some(canMeasure);
+    }
   }
   function update(state){bodyState=state;
+    $("bodyExport").disabled=!historySelection||exportingZip||isRecording(historySelection);
+    $("history-edit").disabled=!historySelection||isRecording(historySelection);
     const devices=state.devices||[],real=devices.filter(d=>d.valid&&d.source==="real"),selected=devices.find(d=>d.device_id===state.selected_device_id);
     $("connection-summary").textContent=real.length?`${real.length} 个硬件节点有效`:"等待连接设备";
     $("replay-source").textContent=state.mode==="REPLAY"?`保存姿态 · ${state.replay?.session||""}`:"尚未载入会话，请从历史记录选择";
@@ -237,7 +526,103 @@
     status.insertBefore(deviceSummary,calibrationSummary);
     $("usb-connect").onclick=()=>{navigate("calibration");calibrationStep(0);$("transport").value="serial";$("transport").dispatchEvent(new Event("change"));};
     $("wifi-connect").onclick=()=>{navigate("calibration");calibrationStep(0);$("transport").value="wifi";$("transport").dispatchEvent(new Event("change"));};
-    const records=$("view-records");records.innerHTML='<div class="page-heading"><span class="kicker">SESSION LIBRARY</span><h2>历史记录与数据导出</h2><p>完整采样、实际骨架帧与设备配置</p></div><div class="records-layout"><aside class="glass record-browser"><h2>动作会话</h2><div id="history-list"></div></aside><section class="glass record-preview"><span class="kicker">SELECTED SESSION</span><h2 id="history-title">选择一条记录</h2><pre id="history-meta">尚无会话详情</pre><button id="history-open" class="primary" disabled>打开姿态回放 →</button><h3>旧版 CSV 记录</h3></section><aside class="glass record-export"><h2>导出数据</h2><p>ZIP 包含全部原始采样、骨架帧、事件及配置。</p><button id="bodyExport" class="primary" disabled>导出完整 ZIP</button><p class="subtle">正在记录的会话须停止保存后才能导出。</p></aside></div>';
+    const records=$("view-records");
+    records.innerHTML=`
+      <div class="records-layout">
+        <aside class="glass record-browser">
+          <h2>动作会话</h2>
+          <div id="history-list"></div>
+        </aside>
+        <section class="glass record-preview">
+          <h2>数据预览</h2>
+          <p id="history-title">选择一条记录</p>
+          <p id="history-meta" class="subtle"></p>
+          <p id="history-notes" class="subtle" hidden></p>
+          <div class="buttons"><button id="history-open" disabled>打开姿态回放 →</button>
+            <button id="history-edit" disabled>编辑会话信息</button></div>
+          <p id="preview-status" role="status"></p>
+          <p id="history-endpoint" hidden></p>
+          <div class="tableScroll">
+            <table id="history-samples" class="values" aria-label="位移结果预览" hidden>
+              <thead></thead><tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <aside class="glass record-export">
+          <h2>导出数据</h2>
+          <button id="history-measure" class="primary" disabled>解算并导出 CSV</button>
+          <p>选一条动作和六面标定，生成单节点位移结果。</p>
+          <button id="bodyExport" disabled>导出完整 ZIP</button>
+          <p>包含所选会话的原始采样、骨架帧和配置。</p>
+          <p id="history-export-status" role="status"></p>
+          <section id="history-replay" class="history-replay" hidden>
+            <div class="section-heading"><h3>姿态回放</h3><button id="history-replay-close" type="button">关闭</button></div>
+            <p id="history-replay-status" role="status"></p>
+            <canvas id="history-replay-canvas" aria-label="保存的板卡姿态" hidden></canvas>
+            <div class="buttons"><button id="history-replay-toggle" type="button" disabled>播放</button>
+              <output id="history-replay-time">—</output>
+              <select id="history-replay-kind" aria-label="姿态视图">
+                <option value="boards">板卡姿态</option><option value="fixed">人体姿态</option>
+              </select></div>
+            <input id="history-replay-seek" type="range" min="0" step="0.01" aria-label="回放时间" disabled>
+          </section>
+        </aside>
+      </div>`;
+    const measurement=make("dialog","session-measure",`
+      <form id="history-measure-form">
+        <h2 id="history-measure-title">解算并导出 CSV</h2>
+        <label>动作会话<select id="history-measure-session" required></select></label>
+        <fieldset id="history-measure-faces"><legend>六面静置标定</legend></fieldset>
+        <div class="measure-fields">
+          <label>起点静置（秒）<input id="history-measure-start" type="number" value="1" min="0.5" max="5" step="any" required></label>
+          <label>终点静置（秒）<input id="history-measure-end" type="number" value="1" min="0.5" max="5" step="any" required></label>
+        </div>
+        <p id="history-measure-error" role="status"></p>
+        <div class="buttons"><button id="history-measure-cancel" type="button">取消</button><button type="submit" value="preview">只解算并预览</button><button class="primary" type="submit" value="download">解算并下载</button></div>
+      </form>`);
+    measurement.id="history-measure-dialog";
+    measurement.setAttribute("aria-labelledby","history-measure-title");
+    main.append(measurement);
+    for(const face of motionFaces){
+      const label=make("label","",face+" 朝上");
+      const select=document.createElement("select");
+      select.dataset.face=face;
+      select.required=true;
+      label.append(select);
+      $("history-measure-faces").append(label);
+    }
+    $("history-measure-session").onchange=()=>updateMotionFaces();
+    $("history-measure").onclick=openMotionExport;
+    $("history-measure-form").onsubmit=exportMeasuredMotion;
+    $("history-measure-cancel").onclick=()=>measurement.close();
+    measurement.oncancel=event=>{if(exportingMotion)event.preventDefault();};
+    $("bodyExport").onclick=exportHistoryZip;
+    $("history-replay-close").onclick=closeHistoryReplay;
+    $("history-replay-toggle").onclick=toggleHistoryReplay;
+    $("history-replay-kind").onchange=drawHistoryReplay;
+    $("history-replay-seek").oninput=event=>{
+      if(!replayPreview)return;
+      replayPreview.time=event.target.valueAsNumber;
+      if(replayPreview.playing)replayPreview.started=performance.now()-replayPreview.time*1000;
+      drawHistoryReplay();
+    };
+    const edit=make("dialog","session-measure",`
+      <form id="history-edit-form">
+        <h2 id="history-edit-title">编辑会话信息</h2>
+        <p id="history-edit-id" class="subtle"></p>
+        <label>显示名称<input name="title" maxlength="80"></label>
+        <label>标定方法<input name="calibration_method" maxlength="80" placeholder="例如：Wi-Fi 六面静置"></label>
+        <label>原始轴朝向<select name="calibration_face"><option value="">未指定</option>
+          ${motionFaces.map(face=>`<option value="${face}">${face} 朝上</option>`).join("")}</select></label>
+        <label>备注<textarea name="notes" maxlength="1000" rows="3"></textarea></label>
+        <p id="history-edit-status" role="status"></p>
+        <div class="buttons"><button id="history-edit-cancel" type="button">取消</button>
+          <button type="submit" class="primary">保存</button></div>
+      </form>`);
+    edit.id="history-edit-dialog";
+    edit.setAttribute("aria-labelledby","history-edit-title");
+    main.append(edit);
+    $("history-edit-cancel").onclick=()=>edit.close();
     const historyTools=make("div","session-tools",'<span id="history-capacity" class="badge">—</span><p id="history-status" class="subtle" role="status"></p>');
     historyTools.insertBefore(button("打开回收站",()=>navigate("trash")),historyTools.lastChild);
     records.querySelector(".record-browser").insertBefore(historyTools,$("history-list"));
@@ -253,10 +638,27 @@
     deleteDialog.oncancel=event=>{if($("history-delete-submit").disabled)event.preventDefault();};
     const trash=$("view-trash");
     trash.innerHTML='<div class="page-heading"><h2>回收站</h2><p>本开发台移入 Windows 回收站的会话</p></div><section class="glass trash-panel"><div id="trash-tools" class="session-tools"><span id="trash-capacity" class="badge">—</span></div><p id="trash-status" class="subtle" role="status"></p><div id="trash-list"></div></section>';
-    $("trash-tools").append(button("返回历史记录",()=>navigate("records")),button("刷新回收站",refreshTrash));
-    const preview=make("div","history-charts",'<button id="history-preview" disabled>预览保存曲线</button><p id="preview-status" role="status">选择会话后读取曲线</p><label>加速度 / g<canvas id="history-chart-0"></canvas></label><label>角速度 / °/s<canvas id="history-chart-1"></canvas></label><label>磁场 / mG<canvas id="history-chart-2"></canvas></label>');records.querySelector(".record-preview").append(preview);$("history-preview").onclick=previewHistory;
-    const csvButton=button("导出单节点运动结果 CSV",exportMotionCsv);csvButton.id="history-csv";csvButton.disabled=true;records.querySelector(".record-export").append(csvButton);records.querySelector(".record-browser").append(button("刷新会话",refreshHistory));
-    const legacy=$("recordDialog"),legacyPanel=make("div","legacy-records");while(legacy.firstChild)legacyPanel.append(legacy.firstChild);legacy.replaceWith(legacyPanel);legacyPanel.id="recordDialog";legacyPanel.showModal=()=>navigate("records");legacyPanel.close=()=>{};records.querySelector(".record-preview").append(legacyPanel);$("closeDialog").hidden=true;
+    const emptyTrashButton=button("一键清空",confirmEmptyTrash);
+    emptyTrashButton.id="trash-empty";
+    emptyTrashButton.disabled=true;
+    $("trash-tools").append(button("返回历史记录",()=>navigate("records")),button("刷新回收站",refreshTrash),emptyTrashButton);
+    const emptyTrashDialog=make("dialog","session-delete",'<h2 id="trash-empty-title">一键清空回收站</h2><p id="trash-empty-details"></p><div class="buttons"><button id="trash-empty-cancel" type="button">取消</button><button id="trash-empty-submit" type="button">永久删除</button></div>');
+    emptyTrashDialog.id="trash-empty-dialog";
+    emptyTrashDialog.setAttribute("aria-labelledby","trash-empty-title");
+    emptyTrashDialog.setAttribute("aria-describedby","trash-empty-details");
+    main.append(emptyTrashDialog);
+    $("trash-empty-cancel").onclick=()=>emptyTrashDialog.close();
+    emptyTrashDialog.oncancel=event=>{if($("trash-empty-submit").disabled)event.preventDefault();};
+    records.querySelector(".record-browser").append(button("刷新会话",refreshHistory));
+    const legacy=$("recordDialog");
+    const legacyPanel=make("details","legacy-records","<summary>旧版 CSV 记录</summary>");
+    while(legacy.firstChild)legacyPanel.append(legacy.firstChild);
+    legacy.replaceWith(legacyPanel);
+    legacyPanel.id="recordDialog";
+    legacyPanel.showModal=()=>{navigate("records");legacyPanel.open=true;};
+    legacyPanel.close=()=>{legacyPanel.open=false;};
+    records.querySelector(".record-preview").append(legacyPanel);
+    $("closeDialog").hidden=true;
     const replay=$("view-replay");replay.innerHTML='<div class="page-heading"><span class="kicker">POSE REPLAY</span><h2>姿态回放</h2><p id="replay-source">尚未载入会话，请从历史记录选择</p></div><div id="replay-model"></div><div id="replay-controls" class="glass"></div><div id="replay-charts"></div>';
     const controls=$("replay-controls");["bodyRefreshSessions","bodySessions","bodyReplayOpen","bodyReplayPlay","bodyReplayPause","bodyReplayClose","bodyReplaySeek","bodyReplayTime"].forEach(id=>controls.append($(id)));
     controls.append(button("选择历史记录",()=>navigate("records")));replay.append($("playback"));

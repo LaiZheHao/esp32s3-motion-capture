@@ -18,7 +18,7 @@ from uuid import uuid4
 SCHEMA = "imu-body-session/1"
 FILES = ("metadata.json", "samples.jsonl", "body_frames.jsonl", "events.jsonl", "frame_index.jsonl")
 DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "recordings"
-HISTORY_LIMIT = 30
+HISTORY_LIMIT = 50
 
 
 def session_path(root, name):
@@ -44,7 +44,8 @@ def catalog(root=DEFAULT_ROOT):
                               "status": data["status"], "duration_s": data.get("duration_s", 0),
                               "counts": data.get("counts", {}), "started_unix": data["started_unix"],
                               "source_types": data.get("source_types", []),
-                              "calibration_protected": data.get("calibration_protected")})
+                              "calibration_protected": data.get("calibration_protected"),
+                              "description": data.get("description", {})})
         except (OSError, ValueError, KeyError):
             continue
     return sorted(items, key=lambda i: i["started_unix"], reverse=True)

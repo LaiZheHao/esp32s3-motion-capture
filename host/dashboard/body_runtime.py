@@ -12,11 +12,12 @@ import re
 from time import monotonic, time
 
 from .body_engine import BodyEngine
-from .body_recording import BodyRecorder, BodyReplay, DEFAULT_ROOT
+from .body_recording import BodyRecorder, BodyReplay, DEFAULT_ROOT, session_path
 from .coordinates import CoordinateSettings
 from .fusion import euler_degrees, euler_quaternion
 from .models import SensorSample
 from .motion import DisplacementEstimator
+from .motion_export import export_motion
 from .protocol import CurrentCsvProtocol, FrameError
 from .serial_transport import SerialTransport
 from .tcp_transport import TcpTransport
@@ -312,11 +313,34 @@ class BodyRuntime:
         async with self._lock:
             return await asyncio.to_thread(session_library.restore, self.recorder.root, trash_id)
 
+    async def empty_trash(self, trash_ids):
+        async with self._lock:
+            return await asyncio.to_thread(session_library.empty_trash, self.recorder.root, trash_ids)
+
     async def protect_session(self, session, protected):
         async with self._lock:
             if reason := self.session_busy_reason(session):
                 raise session_library.SessionConflict(reason)
             await asyncio.to_thread(session_library.set_calibration, self.recorder.root, session, protected)
+
+    async def export_session_motion(self, session, faces, start_still, end_still):
+        async with self._lock:
+            if self.recorder.busy and self.recorder.session in (session, *faces.values()):
+                raise session_library.SessionConflict("请先停止录制并等待保存完成")
+
+            def calculate():
+                root = self.recorder.root
+                motion = session_path(root, session)
+                face_folders = {face: session_path(root, name) for face, name in faces.items()}
+                return export_motion(motion, face_folders, start_still, end_still)
+
+            return await asyncio.to_thread(calculate)
+
+    async def describe_session(self, session, description):
+        async with self._lock:
+            if self.recorder.session == session and self.recorder.busy:
+                raise session_library.SessionConflict("请先停止录制并等待保存完成")
+            await asyncio.to_thread(session_library.describe_session, self.recorder.root, session, description)
 
     async def command(self, data):
         async with self._lock:

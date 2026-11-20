@@ -3,19 +3,21 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from typing import Literal
 from serial.tools import list_ports
 
 from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketState
-from pydantic import StrictBool
+from pydantic import BaseModel, Field, StrictBool, StrictStr
 
 from .service import Runtime
 from .body_runtime import BodyRuntime
 from .body_config import load_config
 from .body_engine import BodyEngine
 from . import body_recording, session_library
+from .motion_export import preview_motion
 from .segment_displacement import MOTION_CSV_NAME
 from .recordings import RecordingNotFound, catalog, preview_csv, safe_item, session_zip, replay_data
 
@@ -77,10 +79,29 @@ async def protect_body_session(session: str, protected: StrictBool = Body(embed=
     await _session_operation(body_runtime.protect_session, session, protected)
 
 
+class SessionDescription(BaseModel):
+    title: StrictStr = Field(default="", max_length=80)
+    notes: StrictStr = Field(default="", max_length=1000)
+    calibration_method: StrictStr = Field(default="", max_length=80)
+    calibration_face: Literal["+X", "-X", "+Y", "-Y", "+Z", "-Z"] | None = None
+
+
+@app.put("/api/body/recordings/{session}/description", status_code=204)
+async def describe_body_session(session: str, description: SessionDescription):
+    fields = {key: value.strip() if isinstance(value, str) else value
+              for key, value in description.model_dump().items()}
+    await _session_operation(body_runtime.describe_session, session, fields)
+
+
 @app.get("/api/body/trash")
 async def body_trash():
     items = await _session_operation(asyncio.to_thread, session_library.trash_catalog, body_runtime.recorder.root)
     return {"items": items, "limit": session_library.TRASH_LIMIT}
+
+
+@app.delete("/api/body/trash")
+async def empty_body_trash(trash_ids: list[StrictStr] = Body(embed=True)):
+    return {"deleted": await _session_operation(body_runtime.empty_trash, trash_ids)}
 
 
 @app.put("/api/body/trash/{trash_id}/restore")
@@ -98,6 +119,36 @@ async def body_motion_csv(session: str):
     if result.parent != folder or not result.is_file():
         raise HTTPException(status_code=404, detail="该会话尚无单节点运动结果，请先运行 tools/measure_displacement.py")
     return FileResponse(result, media_type="text/csv", filename=f"{session}-{MOTION_CSV_NAME}")
+
+
+@app.get("/api/body/recordings/{session}/motion-preview")
+async def body_motion_preview(session: str):
+    if body_runtime.recorder.busy and session == body_runtime.recorder.session:
+        raise HTTPException(status_code=409, detail="请先停止录制并等待保存完成")
+    try:
+        folder = body_recording.session_path(body_runtime.recorder.root, session)
+        return await asyncio.to_thread(preview_motion, folder)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/body/recordings/{session}/measure-motion")
+async def measure_body_motion(session: str, faces: dict[StrictStr, StrictStr] = Body(),
+                              start_still: float = Body(default=1.), end_still: float = Body(default=1.)):
+    try:
+        return await body_runtime.export_session_motion(session, faces, start_still, end_still)
+    except session_library.SessionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="会话缺少完整的原始采样字段") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="无法读取或保存会话文件") from exc
 
 
 @app.get("/api/body/recordings/{session}/download")

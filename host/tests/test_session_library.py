@@ -33,21 +33,21 @@ class SessionLibraryTests(unittest.TestCase):
     def test_recording_and_restore_refuse_at_history_limit(self):
         for index in range(HISTORY_LIMIT):
             saved_session(self.root, index)
-        with self.assertRaisesRegex(ValueError, "30"):
+        with self.assertRaisesRegex(ValueError, "已达 50 条"):
             BodyRecorder(self.root).start({})
         entry = SimpleNamespace(InvokeVerb=lambda _: self.fail("must not invoke restore"))
         with patch.object(session_library, "_windows_com", return_value=nullcontext()), \
                 patch.object(session_library, "_project_items", return_value=[
                     (entry, "20261108-100000-body-ffffffff", Path("$RABCDEF"))
                 ]):
-            with self.assertRaisesRegex(session_library.SessionConflict, "30"):
+            with self.assertRaisesRegex(session_library.SessionConflict, "已达 50 条"):
                 session_library.restore(self.root, "$RABCDEF")
 
     def test_recycle_refuses_at_trash_limit_and_preserves_folder(self):
         folder = saved_session(self.root, 1)
         with patch.object(session_library, "_windows_com", return_value=nullcontext()), \
                 patch.object(session_library, "_project_items", return_value=[None] * session_library.TRASH_LIMIT):
-            with self.assertRaisesRegex(session_library.SessionConflict, "20"):
+            with self.assertRaisesRegex(session_library.SessionConflict, "已达 50 条"):
                 session_library.recycle(self.root, folder.name)
         self.assertTrue(folder.is_dir())
 
@@ -94,3 +94,30 @@ class SessionLibraryTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 session_library.recycle(self.root, "../elsewhere")
         windows_com.assert_not_called()
+
+    def test_empty_trash_requires_current_project_entries(self):
+        history = saved_session(self.root, 1)
+        runtime = BodyRuntime(recording_dir=self.root)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        targets = [
+            (object(), "20261108-100000-body-00000002", Path("$RAAAAAA")),
+            (object(), "20261108-100000-body-00000003", Path("$RBBBBBB")),
+        ]
+        com = object()
+        with patch("dashboard.app.body_runtime", runtime), \
+                patch.object(session_library, "_windows_com", return_value=nullcontext(com)), \
+                patch.object(session_library, "_project_items", return_value=targets) as project_items, \
+                patch.object(session_library, "_permanently_delete") as delete:
+            url = "/api/body/trash"
+            self.assertEqual(client.request("DELETE", url).status_code, 422)
+            for ids in ([], ["$RAAAAAA"], ["$RAAAAAA", "$RUNRELATED"]):
+                self.assertEqual(client.request("DELETE", url, json={"trash_ids": ids}).status_code, 409)
+            delete.assert_not_called()
+
+            result = client.request("DELETE", url, json={"trash_ids": ["$RBBBBBB", "$RAAAAAA"]})
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"deleted": 2})
+            project_items.assert_called_with(self.root)
+            delete.assert_called_once_with(com, targets)
+        self.assertTrue(history.is_dir())

@@ -12,7 +12,7 @@ from time import monotonic, sleep
 from .body_recording import HISTORY_LIMIT, SCHEMA, catalog
 
 
-TRASH_LIMIT = 20
+TRASH_LIMIT = 50
 SESSION_ID = re.compile(r"\d{8}-\d{6}-body-[0-9a-f]{8}")
 
 
@@ -65,6 +65,17 @@ def set_calibration(root, session, protected):
     folder = _session_folder(root, session)
     metadata = _metadata(folder)
     metadata["calibration_protected"] = protected
+    _save_metadata(folder, metadata)
+
+
+def describe_session(root, session, description):
+    folder = _session_folder(root, session)
+    metadata = _metadata(folder)
+    metadata["description"] = description
+    _save_metadata(folder, metadata)
+
+
+def _save_metadata(folder, metadata):
     content = json.dumps(metadata, ensure_ascii=False, indent=2, allow_nan=False)
     with NamedTemporaryFile(dir=folder, prefix=".metadata-", delete=False) as handle:
         temporary = Path(handle.name)
@@ -136,7 +147,7 @@ def recycle(root, session):
         raise SessionConflict("标定会话受保护，请先解除标定保护")
     with _windows_com() as com:
         if sum(1 for _ in _project_items(root)) >= TRASH_LIMIT:
-            raise SessionConflict(f"回收站已达 {TRASH_LIMIT} 条，请先还原或在 Windows 回收站处理旧会话")
+            raise SessionConflict(f"回收站已达 {TRASH_LIMIT} 条，请先还原会话或使用「一键清空」")
         from win32com.shell import shell, shellcon
 
         operation = com.CoCreateInstance(shell.CLSID_FileOperation, None, com.CLSCTX_INPROC_SERVER,
@@ -168,3 +179,35 @@ def restore(root, trash_id):
                     sleep(.1)
                 raise OSError("尚未确认 Windows 回收站还原完成，请刷新后查看")
     raise FileNotFoundError("回收站中找不到该会话")
+
+
+def _permanently_delete(com, targets):
+    from win32com.shell import shell, shellcon
+
+    operation = com.CoCreateInstance(shell.CLSID_FileOperation, None, com.CLSCTX_INPROC_SERVER,
+                                     shell.IID_IFileOperation)
+    operation.SetOperationFlags(shellcon.FOF_NOCONFIRMATION | shellcon.FOF_NOERRORUI | shellcon.FOF_SILENT)
+    for item, _, _ in targets:
+        pidl = shell.SHGetIDListFromObject(item._oleobj_)
+        recycled_item = shell.SHCreateItemFromIDList(pidl, shell.IID_IShellItem)
+        operation.DeleteItem(recycled_item, None)
+    try:
+        operation.PerformOperations()
+    finally:
+        for _, _, stored in targets:
+            # IFileOperation can remove the $R data but leave its paired $I restore record.
+            if (stored.name.startswith("$R") and stored.parent.parent.name.casefold() == "$recycle.bin"
+                    and not lexists(stored)):
+                stored.with_name("$I" + stored.name[2:]).unlink(missing_ok=True)
+    if operation.GetAnyOperationsAborted() or any(lexists(stored) for _, _, stored in targets):
+        raise OSError("Windows 未能删除全部会话，请查看回收站中的剩余记录")
+
+
+def empty_trash(root, confirmed_ids):
+    with _windows_com() as com:
+        targets = list(_project_items(root))
+        if {stored.name for _, _, stored in targets} != set(confirmed_ids):
+            raise SessionConflict("回收站列表已变化，请查看刷新后的列表再确认")
+        if targets:
+            _permanently_delete(com, targets)
+        return len(targets)
