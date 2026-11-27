@@ -39,6 +39,7 @@ jobs:
           node --check web/mannequin.js
           node --check web/relative_validation_math.js
           node --check web/relative_validation.js
+          node --check web/arm_vqf.js
       - name: Test pose transformations
         run: |
           node tests/test_pose_math.js
@@ -71,12 +72,16 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror ../firmware/tests/test_onboard_motion.cpp -o "$RUNNER_TEMP/test_onboard_motion"
           "$RUNNER_TEMP/test_onboard_motion"
+      - name: Test migrated SlimeVR VQF
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -DIMU_SLIME_VQF -I../firmware/lib/slimevr-vqf ../firmware/tests/test_slime_vqf.cpp ../firmware/lib/slimevr-vqf/vqf.cpp -o "$RUNNER_TEMP/test_slime_vqf"
+          "$RUNNER_TEMP/test_slime_vqf"
 
   firmware:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [esp32-s3-devkitm-1, esp32-s3-client-b, esp32-s3-motion-usb]
+        environment: [esp32-s3-devkitm-1, esp32-s3-client-b, esp32-s3-motion-usb, esp32-s3-slime-vqf]
     defaults:
       run:
         working-directory: firmware

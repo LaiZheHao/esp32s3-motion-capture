@@ -22,6 +22,17 @@ def parse(line):
                 raw_accel=values[:3], linear_accel=values[3:6], velocity=values[6:9], position=values[9:12])
 
 
+def parse_fusion(line):
+    fields=line.strip().split(',')
+    if len(fields)!=11 or fields[0]!='[FUSION1]':
+        return None
+    values=list(map(float,fields[3:10]))
+    if not all(math.isfinite(v) for v in values) or not .99<math.hypot(*values[:4])<1.01:
+        raise ValueError('invalid fusion quaternion')
+    return dict(sequence=int(fields[1]),device_us=int(fields[2]),quaternion=values[:4],
+                gyro_bias_dps=values[4:],rest=fields[10]=='1',algorithm='SlimeVR VQF 6D')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--serial',required=True)
@@ -42,6 +53,10 @@ def main():
                     while True:
                         while not commands.empty():port.write(commands.get_nowait())
                         line=port.readline().decode('utf-8',errors='replace')
+                        fusion=parse_fusion(line)
+                        if fusion:
+                            with lock:state['fusion']={**fusion,'received':monotonic()}
+                            if capture:capture.write(json.dumps({'kind':'fusion','unix':time(),**fusion})+'\n')
                         if line.startswith('IMU3,'):
                             f=line.split(',')
                             if len(f)==20:

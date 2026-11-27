@@ -1,6 +1,9 @@
 #pragma once
 #include <cmath>
 #include <cstdint>
+#ifdef IMU_SLIME_VQF
+#include <vqf.h>
+#endif
 
 // Experimental relative motion in the initial gravity-aligned frame, SI units.
 // No magnetometer: heading is relative and can drift. ZUPT is opt-in because
@@ -10,6 +13,10 @@ class OnboardMotion {
   float q[4]={1,0,0,0}, p[3]={}, v[3]={}, a[3]={};
   bool ready=false, zupt=false, held=false;
   unsigned count=0;
+#ifdef IMU_SLIME_VQF
+  bool fusionRest()const{return fusion.getRestDetected();}
+  void fusionBias(float out[3])const{fusion.getBiasEstimate(out);for(int i=0;i<3;i++)out[i]*=57.29577951f;}
+#endif
   void reset(){ *this=OnboardMotion(); }
   void update(uint32_t us,const float acc[3],const float gyro[3]) {
     if(!finite(acc)||!finite(gyro)){reset();return;}
@@ -26,9 +33,27 @@ class OnboardMotion {
       for(int i=0;i<3;i++){meanA[i]=sumA[i]/count;bias[i]=sumG[i]/count;varianceA+=squareA[i]/count-meanA[i]*meanA[i];varianceG+=squareG[i]/count-bias[i]*bias[i];}
       if(varianceA>.0001f||varianceG>.1f){clearCalibration();return;}
       gravity=length(meanA);euler(std::atan2(meanA[1],meanA[2]),std::atan2(-meanA[0],std::hypot(meanA[1],meanA[2])),0,q);
+#ifdef IMU_SLIME_VQF
+      fusion.resetState();
+      auto state=fusion.getState();
+      for(int i=0;i<4;i++)state.accQuat[i]=q[i];
+      fusion.setState(state);
+      float initialBias[3];for(int i=0;i<3;i++)initialBias[i]=bias[i]*.01745329252f;
+      fusion.setBiasEstimate(initialBias,.05f*.01745329252f);
+#endif
       ready=true;return;
     }
     float g[3];for(int i=0;i<3;i++)g[i]=(gyro[i]-bias[i])*.01745329252f;
+#ifdef IMU_SLIME_VQF
+    float gyroRad[3],accSI[3],onlineBias[3];
+    for(int i=0;i<3;i++){gyroRad[i]=gyro[i]*.01745329252f;accSI[i]=acc[i]*9.80665f/gravity;}
+    // Same six-axis VQF update ordering as SlimeVR's SensorFusion adapter.
+    fusion.updateAcc(accSI);
+    fusion.updateGyr(gyroRad,dt);
+    fusion.getQuat6D(q);
+    fusion.getBiasEstimate(onlineBias);
+    for(int i=0;i<3;i++)g[i]=gyroRad[i]-onlineBias[i];
+#else
     float dq[4]={-q[1]*g[0]-q[2]*g[1]-q[3]*g[2],q[0]*g[0]+q[2]*g[2]-q[3]*g[1],q[0]*g[1]-q[1]*g[2]+q[3]*g[0],q[0]*g[2]+q[1]*g[1]-q[2]*g[0]};
     for(int i=0;i<4;i++)q[i]+=.5f*dq[i]*dt;
     normalize();
@@ -41,6 +66,7 @@ class OnboardMotion {
       for(int i=0;i<4;i++)q[i]+=(obs[i]*(dot<0?-1:1)-q[i])*gain;
       normalize();
     }
+#endif
     const float w=q[0],x=q[1],y=q[2],z=q[3],scale=9.80665f/gravity;
     a[0]=scale*((1-2*y*y-2*z*z)*acc[0]+2*(x*y-z*w)*acc[1]+2*(x*z+y*w)*acc[2]);
     a[1]=scale*(2*(x*y+z*w)*acc[0]+(1-2*x*x-2*z*z)*acc[1]+2*(y*z-x*w)*acc[2]);
@@ -48,12 +74,19 @@ class OnboardMotion {
     float delta[3];for(int i=0;i<3;i++)delta[i]=acc[i]-previousRaw[i];
     restSeconds=(length(g)<.02094f&&std::fabs(an-gravity)<.01f&&length(delta)<.006f)?restSeconds+dt:0;
     held=zupt&&restSeconds>.5f;
+#ifdef IMU_SLIME_VQF
+    held=zupt&&fusion.getRestDetected();
+#endif
     for(int i=0;i<3;i++){
       if(held){v[i]=0;}else{const float nv=v[i]+.5f*(a[i]+previousA[i])*dt;p[i]+=.5f*(v[i]+nv)*dt;v[i]=nv;}
       previousA[i]=a[i];previousRaw[i]=acc[i];
     }
   }
  private:
+#ifdef IMU_SLIME_VQF
+  static VQFParams slimeParams(){VQFParams params;params.tauAcc=2.f;params.restMinT=2.f;params.restThGyr=.6f;params.restThAcc=.06f;return params;}
+  VQF fusion{slimeParams(),.01f};
+#endif
   uint32_t last=0;
   float sumA[3]={},sumG[3]={},squareA[3]={},squareG[3]={},bias[3]={},previousA[3]={},previousRaw[3]={};
   float seconds=0,gravity=1,restSeconds=0;

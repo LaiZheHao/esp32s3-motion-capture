@@ -8,6 +8,13 @@ spec.loader.exec_module(module)
 
 
 class BoardTelemetryTests(unittest.TestCase):
+    def test_vqf_telemetry_has_valid_quaternion_and_bias_units(self):
+        fusion=module.parse_fusion('[FUSION1],4,40000,1,0,0,0,.1,.2,.3,1')
+        self.assertEqual(fusion['gyro_bias_dps'],[.1,.2,.3])
+        self.assertTrue(fusion['rest'])
+        self.assertIsNone(module.parse_fusion('IMU3,a'))
+        with self.assertRaises(ValueError):
+            module.parse_fusion('[FUSION1],4,40000,0,0,0,0,.1,.2,.3,1')
     def test_si_units_axis_order_and_status(self):
         row=module.parse('[MOTION1],4,40000,1,0,200,1,2,9.8,4,5,6,7,8,9,10,11,12')
         self.assertTrue(row['ready'])

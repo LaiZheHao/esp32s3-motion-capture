@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/SlimeVR/SlimeVR-Tracker-ESP",
+  "commit": "9fae27ac71e0f8236a72f890da213f7dbf3f6908",
+  "files_sha256": {
+    "vqf.h": "b418915fc7832880ab0af2742f74fd31c6dd7b07f8365442a735a4d4a2084eef",
+    "vqf.cpp": "86abfd133d0b93f6c1f3cd465aa801ae112652a81fb885489039bb6ad0e59dec"
+  }
+}

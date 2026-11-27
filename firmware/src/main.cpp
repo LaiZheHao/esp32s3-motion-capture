@@ -29,7 +29,11 @@ static OnboardMotion onboardMotion;
 #endif
 static char nodeId[33];
 #ifdef IMU_ONBOARD_MOTION
+#ifdef IMU_SLIME_VQF
+static constexpr char FIRMWARE_VERSION[] = "imu-slime-vqf-20261127-r1";
+#else
 static constexpr char FIRMWARE_VERSION[] = "imu-motion-usb-20261114-r1";
+#endif
 #undef IMU_BODY_SLOT
 #define IMU_BODY_SLOT "unassigned"
 #else
@@ -379,6 +383,12 @@ void loop() {
       static_cast<unsigned long>(sequence),static_cast<unsigned long>(sampledAtUs),onboardMotion.ready?1U:0U,onboardMotion.held?1U:0U,onboardMotion.count,
       ax*9.80665f,ay*9.80665f,az*9.80665f,onboardMotion.a[0],onboardMotion.a[1],onboardMotion.a[2],onboardMotion.v[0],onboardMotion.v[1],onboardMotion.v[2],onboardMotion.p[0],onboardMotion.p[1],onboardMotion.p[2]);
     if(size>0 && static_cast<size_t>(size)<sizeof(motionLine) && Serial.availableForWrite()>=size) Serial.write(reinterpret_cast<const uint8_t *>(motionLine),static_cast<size_t>(size));
+#ifdef IMU_SLIME_VQF
+    float estimatedBias[3];onboardMotion.fusionBias(estimatedBias);
+    const int fusionSize=snprintf(motionLine,sizeof(motionLine),"[FUSION1],%lu,%lu,%.7f,%.7f,%.7f,%.7f,%.5f,%.5f,%.5f,%u\n",
+      static_cast<unsigned long>(sequence),static_cast<unsigned long>(sampledAtUs),onboardMotion.q[0],onboardMotion.q[1],onboardMotion.q[2],onboardMotion.q[3],estimatedBias[0],estimatedBias[1],estimatedBias[2],onboardMotion.fusionRest()?1U:0U);
+    if(fusionSize>0 && static_cast<size_t>(fusionSize)<sizeof(motionLine) && Serial.availableForWrite()>=fusionSize) Serial.write(reinterpret_cast<const uint8_t *>(motionLine),static_cast<size_t>(fusionSize));
+#endif
   }
 #endif
   char line[512];
